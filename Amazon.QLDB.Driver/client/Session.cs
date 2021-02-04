@@ -143,7 +143,7 @@ namespace Amazon.QLDB.Driver
         /// <summary>
         /// Send an asynchronous end session request to QLDB and ignore exceptions.
         /// </summary>
-        internal virtual async void End()
+        internal virtual async Task End()
         {
             try
             {

@@ -41,7 +41,6 @@ namespace Amazon.QLDB.Driver
             RetryPolicy retryPolicy,
             Func<CancellationToken, Task> newSessionAction,
             Func<CancellationToken, Task> nextSessionAction,
-            Func<int, CancellationToken, Task> retryAction,
             CancellationToken cancellationToken = default);
     }
 }

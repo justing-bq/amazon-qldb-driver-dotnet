@@ -21,6 +21,11 @@ namespace Amazon.QLDB.Driver
 
     public class AsyncTransactionExecutor : IAsyncExecutable
     {
+        internal AsyncTransactionExecutor(AsyncTransaction transaction)
+        {
+            throw new NotImplementedException();
+        }
+
         public Task<IAsyncResult> Execute(string statement, CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();

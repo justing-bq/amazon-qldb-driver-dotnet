@@ -44,12 +44,10 @@ namespace Amazon.QLDB.Driver
     /// </list>
     /// </para>
     /// </summary>
-    internal class QldbSession
+    internal class QldbSession : BaseQldbSession
     {
         private readonly ILogger logger;
         private readonly Action<QldbSession> releaseSession;
-        private Session session;
-        private bool isAlive;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="QldbSession"/> class.
@@ -66,11 +64,6 @@ namespace Amazon.QLDB.Driver
             this.isAlive = true;
         }
 
-        public bool IsAlive()
-        {
-            return this.isAlive;
-        }
-
         /// <summary>
         /// Close the internal session object.
         /// </summary>
@@ -82,7 +75,7 @@ namespace Amazon.QLDB.Driver
         /// <summary>
         /// Release the session which still can be used by another transaction.
         /// </summary>
-        public void Release()
+        public override void Release()
         {
             this.releaseSession(this);
         }
@@ -168,16 +161,6 @@ namespace Amazon.QLDB.Driver
             {
                 throw new QldbTransactionException(ExceptionMessages.TransactionAlreadyOpened, string.Empty, this.TryAbort(null), e);
             }
-        }
-
-        /// <summary>
-        /// Retrieve the ID of this session..
-        /// </summary>
-        ///
-        /// <returns>The ID of this session.</returns>
-        internal string GetSessionId()
-        {
-            return this.session.SessionId;
         }
 
         /// <summary>

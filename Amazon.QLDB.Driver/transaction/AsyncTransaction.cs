@@ -18,9 +18,15 @@ namespace Amazon.QLDB.Driver
     using System.Threading;
     using System.Threading.Tasks;
     using Amazon.IonDotnet.Tree;
+    using Microsoft.Extensions.Logging;
 
     internal class AsyncTransaction
     {
+        internal AsyncTransaction(Session session, string txnId, ILogger logger)
+        {
+            throw new NotImplementedException();
+        }
+
         public string Id => throw new NotImplementedException();
 
         public async Task Abort(CancellationToken cancellationToken = default)
