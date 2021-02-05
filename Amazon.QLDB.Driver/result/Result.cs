@@ -16,7 +16,6 @@ namespace Amazon.QLDB.Driver
     using System;
     using System.Collections;
     using System.Collections.Generic;
-    using Amazon.IonDotnet.Builders;
     using Amazon.IonDotnet.Tree;
     using Amazon.QLDBSession.Model;
 
@@ -87,17 +86,12 @@ namespace Amazon.QLDB.Driver
         /// Object which allows for iteration over the individual Ion values that make up the whole result of a statement
         /// execution against QLDB.
         /// </summary>
-        private class IonEnumerator : IEnumerator<IIonValue>
+        private class IonEnumerator : BaseIonEnumerator, IEnumerator<IIonValue>
         {
-            private static readonly IonLoader IonLoader = IonLoader.Default;
-
             private readonly Session session;
             private readonly string txnId;
-            private IEnumerator<ValueHolder> currentEnumerator;
+            private new IEnumerator<ValueHolder> currentEnumerator;
             private string nextPageToken;
-            private long? readIOs = null;
-            private long? writeIOs = null;
-            private long? processingTimeMilliseconds = null;
 
             /// <summary>
             /// Initializes a new instance of the <see cref="IonEnumerator"/> class.
@@ -122,19 +116,6 @@ namespace Amazon.QLDB.Driver
                 if (statementResult.TimingInformation != null)
                 {
                     this.processingTimeMilliseconds = statementResult.TimingInformation.ProcessingTimeMilliseconds;
-                }
-            }
-
-            /// <summary>
-            /// Gets current IIonValue.
-            /// </summary>
-            ///
-            /// <returns>The current IIonValue.</returns>
-            public IIonValue Current
-            {
-                get
-                {
-                    return IonLoader.Load(this.currentEnumerator.Current.IonBinary).GetElementAt(0);
                 }
             }
 
@@ -169,45 +150,6 @@ namespace Amazon.QLDB.Driver
             }
 
             /// <summary>
-            /// Reset. Not supported.
-            /// </summary>
-            public void Reset()
-            {
-                throw new NotSupportedException();
-            }
-
-            /// <summary>
-            /// Gets the current query statistics for the number of read IO requests.
-            /// The statistics are stateful.
-            /// </summary>
-            ///
-            /// <returns>The current IOUsage statistics.</returns>
-            internal IOUsage? GetConsumedIOs()
-            {
-                if (this.readIOs != null || this.writeIOs != null)
-                {
-                    return new IOUsage(this.readIOs.GetValueOrDefault(), this.writeIOs.GetValueOrDefault());
-                }
-
-                return null;
-            }
-
-            /// <summary>
-            /// Gets the current query statistics for server-side processing time. The statistics are stateful.
-            /// </summary>
-            ///
-            /// <returns>The current TimingInformation statistics.</returns>
-            internal TimingInformation? GetTimingInformation()
-            {
-                if (this.processingTimeMilliseconds != null)
-                {
-                    return new TimingInformation(this.processingTimeMilliseconds.Value);
-                }
-
-                return null;
-            }
-
-            /// <summary>
             /// Fetch the next page from the session.
             /// </summary>
             private void FetchPage()
@@ -216,27 +158,6 @@ namespace Amazon.QLDB.Driver
                 this.currentEnumerator = pageResult.Page.Values.GetEnumerator();
                 this.nextPageToken = pageResult.Page.NextPageToken;
                 this.UpdateMetrics(pageResult);
-            }
-
-            /// <summary>
-            /// Update the metrics.
-            /// </summary>
-            private void UpdateMetrics(FetchPageResult pageResult)
-            {
-                if (pageResult.ConsumedIOs != null)
-                {
-                    this.readIOs = this.readIOs == null ?
-                        pageResult.ConsumedIOs.ReadIOs : this.readIOs + pageResult.ConsumedIOs.ReadIOs;
-                    this.writeIOs = this.writeIOs == null ?
-                        pageResult.ConsumedIOs.WriteIOs : this.writeIOs + pageResult.ConsumedIOs.WriteIOs;
-                }
-
-                if (pageResult.TimingInformation != null)
-                {
-                    this.processingTimeMilliseconds = this.processingTimeMilliseconds == null ?
-                        pageResult.TimingInformation.ProcessingTimeMilliseconds :
-                        this.processingTimeMilliseconds + pageResult.TimingInformation.ProcessingTimeMilliseconds;
-                }
             }
         }
     }
