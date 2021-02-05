@@ -14,7 +14,6 @@
 namespace Amazon.QLDB.Driver
 {
     using System;
-    using System.Text.RegularExpressions;
     using System.Threading;
     using Amazon.QLDBSession.Model;
     using Microsoft.Extensions.Logging;
@@ -25,17 +24,15 @@ namespace Amazon.QLDB.Driver
     /// <para>The driver retries in two scenarios: retrying inside a session, and retrying with another session. In the second case,
     /// it would require a <i>recover</i> action to reset the session into a working state.
     /// </summary>
-    internal class RetryHandler : IRetryHandler
+    internal class RetryHandler : BaseRetryHandler, IRetryHandler
     {
-        private readonly ILogger logger;
-
         /// <summary>
         /// Initializes a new instance of the <see cref="RetryHandler"/> class.
         /// </summary>
         /// <param name="logger">The logger to record retries.</param>
         public RetryHandler(ILogger logger)
+            : base(logger)
         {
-            this.logger = logger;
         }
 
         /// <inheritdoc/>
@@ -91,19 +88,6 @@ namespace Amazon.QLDB.Driver
                     throw last;
                 }
             }
-
-            throw last;
-        }
-
-        internal static bool IsTransactionExpiry(Exception ex)
-        {
-            return ex is InvalidSessionException
-                && Regex.Match(ex.Message, @"Transaction\s.*\shas\sexpired").Success;
-        }
-
-        private static string TryGetTransactionId(Exception ex)
-        {
-            return ex is QldbTransactionException exception ? exception.TransactionId : string.Empty;
         }
     }
 }
