@@ -1,3 +1,7 @@
+## Release v1.1.1
+
+Using dot net version 9.0.
+
 ## Release v1.1.0
 
 v1.1 adds support for obtaining basic server-side statistics on individual statement executions.
