@@ -39,7 +39,6 @@ namespace Amazon.QLDB.Driver
         ///
         /// <param name="session">The parent session that represents the communication channel to QLDB.</param>
         /// <param name="statementResult">The result of the statement execution.</param>
-        /// <param name="txnId">The unique ID of the transaction.</param>
         internal AsyncResult(Session session, string txnId, ExecuteStatementResult statementResult)
         {
             this.ionEnumerator = new IonAsyncEnumerator(session, txnId, statementResult);
@@ -83,11 +82,6 @@ namespace Amazon.QLDB.Driver
         /// </summary>
         private class IonAsyncEnumerator : BaseIonEnumerator, IAsyncEnumerator<IIonValue>
         {
-            private readonly Session session;
-            private readonly string txnId;
-            private new IEnumerator<ValueHolder> currentEnumerator;
-            private string nextPageToken;
-
             /// <summary>
             /// Initializes a new instance of the <see cref="IonAsyncEnumerator"/> class.
             /// </summary>
@@ -96,22 +90,8 @@ namespace Amazon.QLDB.Driver
             /// <param name="txnId">The unique ID of the transaction.</param>
             /// <param name="statementResult">The result of the statement execution.</param>
             internal IonAsyncEnumerator(Session session, string txnId, ExecuteStatementResult statementResult)
+                : base(session, txnId, statementResult)
             {
-                this.session = session;
-                this.txnId = txnId;
-                this.currentEnumerator = statementResult.FirstPage.Values.GetEnumerator();
-                this.nextPageToken = statementResult.FirstPage.NextPageToken;
-
-                if (statementResult.ConsumedIOs != null)
-                {
-                    this.readIOs = statementResult.ConsumedIOs.ReadIOs;
-                    this.writeIOs = statementResult.ConsumedIOs.WriteIOs;
-                }
-
-                if (statementResult.TimingInformation != null)
-                {
-                    this.processingTimeMilliseconds = statementResult.TimingInformation.ProcessingTimeMilliseconds;
-                }
             }
 
             /// <summary>
