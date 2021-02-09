@@ -42,12 +42,11 @@ namespace Amazon.QLDB.Driver
             IAsyncRetryHandler retryHandler,
             int maxConcurrentTransactions,
             ILogger logger)
+            : base(maxConcurrentTransactions, logger)
         {
             this.sessionPool = new BlockingCollection<AsyncQldbSession>(maxConcurrentTransactions);
-            this.poolPermits = new SemaphoreSlim(maxConcurrentTransactions, maxConcurrentTransactions);
             this.sessionCreator = sessionCreator;
             this.retryHandler = retryHandler;
-            this.logger = logger;
         }
 
         /// <summary>

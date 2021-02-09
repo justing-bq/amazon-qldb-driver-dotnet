@@ -37,12 +37,11 @@ namespace Amazon.QLDB.Driver
         /// <param name="maxConcurrentTransactions">The maximum number of sessions that can be created from the pool at any one time.</param>
         /// <param name="logger">Logger to be used by this.</param>
         public SessionPool(Func<Session> sessionCreator, IRetryHandler retryHandler, int maxConcurrentTransactions, ILogger logger)
+            : base(maxConcurrentTransactions, logger)
         {
             this.sessionPool = new BlockingCollection<QldbSession>(maxConcurrentTransactions);
-            this.poolPermits = new SemaphoreSlim(maxConcurrentTransactions, maxConcurrentTransactions);
             this.sessionCreator = sessionCreator;
             this.retryHandler = retryHandler;
-            this.logger = logger;
         }
 
         /// <summary>

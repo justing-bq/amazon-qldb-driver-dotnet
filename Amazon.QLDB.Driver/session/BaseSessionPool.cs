@@ -14,15 +14,28 @@
 namespace Amazon.QLDB.Driver
 {
     using System.Threading;
+    using Microsoft.Extensions.Logging;
 
     /// <summary>
     /// Base class for Session Pool.
     /// </summary>
     internal abstract class BaseSessionPool
     {
-        protected const int DefaultTimeoutInMs = 1;
+        private protected const int DefaultTimeoutInMs = 1;
         private protected readonly SemaphoreSlim poolPermits;
+        private protected readonly ILogger logger;
         private protected bool isClosed = false;
+
+        /// <summary>
+        /// Abstract base constructor to initialize a new instance of a session pool.
+        /// </summary>
+        /// <param name="maxConcurrentTransactions">The maximum number of sessions that can be created from the pool at any one time.</param>
+        /// <param name="logger">Logger to be used by this.</param>
+        internal BaseSessionPool(int maxConcurrentTransactions, ILogger logger)
+        {
+            this.poolPermits = new SemaphoreSlim(maxConcurrentTransactions, maxConcurrentTransactions);
+            this.logger = logger;
+        }
 
         internal int AvailablePermit()
         {
