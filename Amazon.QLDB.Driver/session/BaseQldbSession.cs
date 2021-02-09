@@ -13,17 +13,35 @@
 
 namespace Amazon.QLDB.Driver
 {
+    using Microsoft.Extensions.Logging;
+
     /// <summary>
     /// Base class for QLDB Session.
     /// </summary>
     public abstract class BaseQldbSession
     {
+        private protected readonly ILogger logger;
         private protected Session session;
         private protected bool isAlive;
+
+        internal BaseQldbSession(Session session, ILogger logger)
+        {
+            this.session = session;
+            this.logger = logger;
+            this.isAlive = true;
+        }
 
         public bool IsAlive()
         {
             return this.isAlive;
+        }
+
+        /// <summary>
+        /// Close the internal session object.
+        /// </summary>
+        internal void Close()
+        {
+            this.session.End();
         }
 
         /// <summary>

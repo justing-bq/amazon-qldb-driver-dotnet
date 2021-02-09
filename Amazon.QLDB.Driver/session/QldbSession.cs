@@ -46,7 +46,6 @@ namespace Amazon.QLDB.Driver
     /// </summary>
     internal class QldbSession : BaseQldbSession
     {
-        private readonly ILogger logger;
         private readonly Action<QldbSession> releaseSession;
 
         /// <summary>
@@ -56,20 +55,10 @@ namespace Amazon.QLDB.Driver
         /// <param name="session">The session object representing a communication channel with QLDB.</param>
         /// <param name="releaseSession">The delegate method to release the session.</param>
         /// <param name="logger">The logger to be used by this.</param>
-        internal QldbSession(Session session, Action<QldbSession> releaseSession, ILogger logger)
+        internal QldbSession(Session session, Action<QldbSession> releaseSession, ILogger logger) 
+            : base(session, logger)
         {
-            this.session = session;
             this.releaseSession = releaseSession;
-            this.logger = logger;
-            this.isAlive = true;
-        }
-
-        /// <summary>
-        /// Close the internal session object.
-        /// </summary>
-        public void Close()
-        {
-            this.session.End();
         }
 
         /// <summary>

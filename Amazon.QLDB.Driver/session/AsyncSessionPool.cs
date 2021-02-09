@@ -63,7 +63,7 @@ namespace Amazon.QLDB.Driver
         /// </param>
         ///
         /// <returns>The result from the function.</returns>
-        public async Task<T> Execute<T>(Func<AsyncTransactionExecutor, Task<T>> func, RetryPolicy retryPolicy, Func<int, Task> retryAction, CancellationToken cancellationToken = default)
+        public async Task<T> Execute<T>(Func<AsyncTransactionExecutor, Task<T>> func, RetryPolicy retryPolicy, CancellationToken cancellationToken = default)
         {
             AsyncQldbSession session = null;
             try
@@ -78,7 +78,6 @@ namespace Amazon.QLDB.Driver
                         this.poolPermits.Release();
                         session = await this.GetSession(ct);
                     },
-                    retryAction,
                     cancellationToken);
             }
             finally
@@ -93,12 +92,12 @@ namespace Amazon.QLDB.Driver
         /// <summary>
         /// Dispose the session pool and all sessions.
         /// </summary>
-        public async ValueTask Dispose()
+        public void Dispose()
         {
             this.isClosed = true;
             while (this.sessionPool.Count > 0)
             {
-                await this.sessionPool.Take().Close();
+                this.sessionPool.Take().Close();
             }
         }
 

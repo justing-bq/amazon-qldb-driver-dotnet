@@ -32,7 +32,6 @@ namespace Amazon.QLDB.Driver
     /// </summary>
     internal class AsyncQldbSession : BaseQldbSession
     {
-        private readonly ILogger logger;
         private readonly Action<AsyncQldbSession> releaseSession;
 
         /// <summary>
@@ -42,20 +41,10 @@ namespace Amazon.QLDB.Driver
         /// <param name="session">The session object representing a communication channel with QLDB.</param>
         /// <param name="releaseSession">The delegate method to release the session.</param>
         /// <param name="logger">The logger to be used by this.</param>
-        internal AsyncQldbSession(Session session, Action<AsyncQldbSession> releaseSession, ILogger logger)
+        internal AsyncQldbSession(Session session, Action<AsyncQldbSession> releaseSession, ILogger logger) 
+            : base(session, logger)
         {
-            this.session = session;
             this.releaseSession = releaseSession;
-            this.logger = logger;
-            this.isAlive = true;
-        }
-
-        /// <summary>
-        /// Close the internal session object.
-        /// </summary>
-        public async Task Close()
-        {
-            await this.session.End();
         }
 
         /// <summary>
@@ -97,9 +86,9 @@ namespace Amazon.QLDB.Driver
             {
                 transaction = await this.StartTransaction(cancellationToken);
                 T returnedValue = await func(new AsyncTransactionExecutor(transaction));
-                if (returnedValue is IResult)
+                if (returnedValue is IAsyncResult)
                 {
-                    returnedValue = (T)(object)AsyncBufferedResult.BufferResultAsync((IAsyncResult)returnedValue);
+                    returnedValue = (T)(object)(await AsyncBufferedResult.BufferResultAsync((IAsyncResult)returnedValue));
                 }
 
                 await transaction.Commit(cancellationToken);
