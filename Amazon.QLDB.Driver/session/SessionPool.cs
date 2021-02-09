@@ -24,10 +24,8 @@ namespace Amazon.QLDB.Driver
     internal class SessionPool : BaseSessionPool
     {
         private readonly BlockingCollection<QldbSession> sessionPool;
-        private new readonly SemaphoreSlim poolPermits;
         private readonly Func<Session> sessionCreator;
         private readonly IRetryHandler retryHandler;
-        private readonly ILogger logger;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SessionPool"/> class.

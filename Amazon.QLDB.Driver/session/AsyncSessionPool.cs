@@ -25,10 +25,8 @@ namespace Amazon.QLDB.Driver
     internal class AsyncSessionPool : BaseSessionPool
     {
         private readonly BlockingCollection<AsyncQldbSession> sessionPool;
-        private new readonly SemaphoreSlim poolPermits;
         private readonly Func<CancellationToken, Task<Session>> sessionCreator;
         private readonly IAsyncRetryHandler retryHandler;
-        private readonly ILogger logger;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="AsyncSessionPool"/> class.
