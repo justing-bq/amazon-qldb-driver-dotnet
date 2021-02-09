@@ -45,7 +45,6 @@ namespace Amazon.QLDB.Driver
             Func<int, CancellationToken, Task> retryAction,
             CancellationToken cancellationToken = default)
         {
-            Exception last = null;
             int retryAttempt = 0;
 
             while (true)
@@ -62,8 +61,6 @@ namespace Amazon.QLDB.Driver
                     {
                         throw iex;
                     }
-
-                    last = iex;
 
                     if (retryAttempt < retryPolicy.MaxRetries && !IsTransactionExpiry(iex))
                     {
@@ -96,7 +93,7 @@ namespace Amazon.QLDB.Driver
                         continue;
                     }
 
-                    throw last;
+                    throw iex;
                 }
             }
         }

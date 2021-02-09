@@ -23,12 +23,12 @@ namespace Amazon.QLDB.Driver
     /// </summary>
     internal abstract class BaseRetryHandler
     {
-        protected readonly ILogger logger;
+        private protected readonly ILogger logger;
 
         /// <summary>
         /// Initializes a new instance of a retry handler class.
         /// </summary>
-        public BaseRetryHandler(ILogger logger)
+        internal BaseRetryHandler(ILogger logger)
         {
             this.logger = logger;
         }
