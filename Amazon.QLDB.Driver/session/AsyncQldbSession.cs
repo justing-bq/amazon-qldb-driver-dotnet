@@ -41,7 +41,7 @@ namespace Amazon.QLDB.Driver
         /// <param name="session">The session object representing a communication channel with QLDB.</param>
         /// <param name="releaseSession">The delegate method to release the session.</param>
         /// <param name="logger">The logger to be used by this.</param>
-        internal AsyncQldbSession(Session session, Action<AsyncQldbSession> releaseSession, ILogger logger) 
+        internal AsyncQldbSession(Session session, Action<AsyncQldbSession> releaseSession, ILogger logger)
             : base(session, logger)
         {
             this.releaseSession = releaseSession;
@@ -50,7 +50,7 @@ namespace Amazon.QLDB.Driver
         /// <summary>
         /// Release the session which still can be used by another transaction.
         /// </summary>
-        public override void Release()
+        internal override void Release()
         {
             this.releaseSession(this);
         }
@@ -59,49 +59,54 @@ namespace Amazon.QLDB.Driver
         /// Execute the Executor lambda asynchronously against QLDB and retrieve the result within a transaction.
         /// </summary>
         ///
-        /// <param name="func">The Executor lambda representing the block of code to be executed within the transaction. This cannot have any
-        /// side effects as it may be invoked multiple times, and the result cannot be trusted until the
-        /// transaction is committed.</param>
+        /// <param name="func">The Executor lambda representing the block of code to be executed within the transaction.
+        /// This cannot have any side effects as it may be invoked multiple times, and the result cannot be trusted
+        /// until the transaction is committed.</param>
         /// <typeparam name="T">The return type.</typeparam>
         /// <param name="cancellationToken">
-        ///     A cancellation token that can be used by other objects or threads to receive notice of cancellation.
+        /// A cancellation token that can be used by other objects or threads to receive notice of cancellation.
         /// </param>
         ///
-        /// <returns>The return value of executing the executor. Note that if you directly return a <see cref="IAsyncResult"/>, this will
-        /// be automatically buffered in memory before the implicit commit to allow reading, as the commit will close
-        /// any open results. Any other <see cref="IAsyncResult"/> instances created within the executor block will be
-        /// invalidated, including if the return value is an object which nests said <see cref="IAsyncResult"/> instances within it.
+        /// <returns>The return value of executing the executor. Note that if you directly return a
+        /// <see cref="IAsyncResult"/>, this will be automatically buffered in memory before the implicit commit to
+        /// allow reading, as the commit will close any open results. Any other <see cref="IAsyncResult"/> instances
+        /// created within the executor block will be invalidated, including if the return value is an object which
+        /// nests said <see cref="IAsyncResult"/> instances within it.
         /// </returns>
         ///
-        /// <exception cref="TransactionAbortedException">Thrown if the Executor lambda calls <see cref="AsyncTransactionExecutor.Abort"/>.</exception>
+        /// <exception cref="TransactionAbortedException">
+        /// Thrown if the Executor lambda calls <see cref="AsyncTransactionExecutor.Abort"/>.
+        /// </exception>
         /// <exception cref="QldbDriverException">Thrown when called on a disposed instance.</exception>
         /// <exception cref="AmazonServiceException">Thrown when there is an error executing against QLDB.</exception>
-        public async Task<T> Execute<T>(
+        internal async Task<T> Execute<T>(
             Func<AsyncTransactionExecutor, Task<T>> func, CancellationToken cancellationToken = default)
         {
             ValidationUtils.AssertNotNull(func, "func");
 
             AsyncTransaction transaction = null;
+            string transactionId = "None";
             try
             {
                 transaction = await this.StartTransaction(cancellationToken);
+                transactionId = transaction.Id;
                 T returnedValue = await func(new AsyncTransactionExecutor(transaction));
-                if (returnedValue is IAsyncResult)
+                if (returnedValue is IAsyncResult result)
                 {
-                    returnedValue = (T)(object)(await AsyncBufferedResult.BufferResultAsync((IAsyncResult)returnedValue));
+                    returnedValue = (T)(object)(await AsyncBufferedResult.BufferResultAsync(result));
                 }
 
-                await transaction.Commit(cancellationToken);
+                await transaction.Commit();
                 return returnedValue;
             }
             catch (InvalidSessionException ise)
             {
                 this.isAlive = false;
-                throw new RetriableException(transaction.Id, false, ise);
+                throw new RetriableException(transactionId, false, ise);
             }
             catch (OccConflictException occ)
             {
-                throw new RetriableException(transaction.Id, occ);
+                throw new RetriableException(transactionId, occ);
             }
             catch (AmazonServiceException ase)
             {
@@ -109,11 +114,11 @@ namespace Amazon.QLDB.Driver
                     ase.StatusCode == HttpStatusCode.ServiceUnavailable)
                 {
                     throw new RetriableException(
-                        transaction.Id, await this.TryAbort(transaction, cancellationToken), ase);
+                        transactionId, await this.TryAbort(transaction, cancellationToken), ase);
                 }
 
                 throw new QldbTransactionException(
-                    transaction.Id, await this.TryAbort(transaction, cancellationToken), ase);
+                    transactionId, await this.TryAbort(transaction, cancellationToken), ase);
             }
             catch (QldbTransactionException te)
             {
@@ -122,7 +127,7 @@ namespace Amazon.QLDB.Driver
             catch (Exception e)
             {
                 throw new QldbTransactionException(
-                    transaction == null ? null : transaction.Id, await this.TryAbort(transaction, cancellationToken), e);
+                    transactionId, await this.TryAbort(transaction, cancellationToken), e);
             }
         }
 
@@ -135,12 +140,16 @@ namespace Amazon.QLDB.Driver
         /// </param>
         ///
         /// <returns>The newly created transaction object.</returns>
-        public virtual async Task<AsyncTransaction> StartTransaction(CancellationToken cancellationToken = default)
+        internal virtual async Task<AsyncTransaction> StartTransaction(CancellationToken cancellationToken = default)
         {
             try
             {
                 var startTransactionResult = await this.session.StartTransactionAsync(cancellationToken);
-                return new AsyncTransaction(this.session, startTransactionResult.TransactionId, this.logger);
+                return new AsyncTransaction(
+                    this.session,
+                    startTransactionResult.TransactionId,
+                    this.logger,
+                    cancellationToken);
             }
             catch (BadRequestException e)
             {
@@ -169,7 +178,7 @@ namespace Amazon.QLDB.Driver
             {
                 if (transaction != null)
                 {
-                    await transaction.Abort(cancellationToken);
+                    await transaction.Abort();
                 }
                 else
                 {

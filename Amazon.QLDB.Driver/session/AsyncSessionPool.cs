@@ -31,9 +31,13 @@ namespace Amazon.QLDB.Driver
         /// <summary>
         /// Initializes a new instance of the <see cref="AsyncSessionPool"/> class.
         /// </summary>
-        /// <param name="sessionCreator">The method to create a new underlying QLDB session. The operation can be cancelled.</param>
+        /// <param name="sessionCreator">
+        /// The method to create a new underlying QLDB session. The operation can be cancelled.
+        /// </param>
         /// <param name="retryHandler">Handling the retry logic of the execute call.</param>
-        /// <param name="maxConcurrentTransactions">The maximum number of sessions that can be created from the pool at any one time.</param>
+        /// <param name="maxConcurrentTransactions">
+        /// The maximum number of sessions that can be created from the pool at any one time.
+        /// </param>
         /// <param name="logger">Logger to be used by this.</param>
         public AsyncSessionPool(
             Func<CancellationToken, Task<Session>> sessionCreator,
@@ -54,13 +58,15 @@ namespace Amazon.QLDB.Driver
         ///
         /// <param name="func">The function to be executed in the session pool. The operation can be cancelled.</param>
         /// <param name="retryPolicy">The policy on retry.</param>
-        /// <param name="retryAction">The customer retry action. The operation can be cancelled.</param>
         /// <param name="cancellationToken">
-        ///     A cancellation token that can be used by other objects or threads to receive notice of cancellation.
+        /// A cancellation token that can be used by other objects or threads to receive notice of cancellation.
         /// </param>
         ///
         /// <returns>The result from the function.</returns>
-        public async Task<T> Execute<T>(Func<AsyncTransactionExecutor, Task<T>> func, RetryPolicy retryPolicy, CancellationToken cancellationToken = default)
+        public async Task<T> Execute<T>(
+            Func<AsyncTransactionExecutor, Task<T>> func,
+            RetryPolicy retryPolicy,
+            CancellationToken cancellationToken = default)
         {
             AsyncQldbSession session = null;
             try

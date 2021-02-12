@@ -55,7 +55,7 @@ namespace Amazon.QLDB.Driver
         /// <param name="session">The session object representing a communication channel with QLDB.</param>
         /// <param name="releaseSession">The delegate method to release the session.</param>
         /// <param name="logger">The logger to be used by this.</param>
-        internal QldbSession(Session session, Action<QldbSession> releaseSession, ILogger logger) 
+        internal QldbSession(Session session, Action<QldbSession> releaseSession, ILogger logger)
             : base(session, logger)
         {
             this.releaseSession = releaseSession;
@@ -64,7 +64,7 @@ namespace Amazon.QLDB.Driver
         /// <summary>
         /// Release the session which still can be used by another transaction.
         /// </summary>
-        public override void Release()
+        internal override void Release()
         {
             this.releaseSession(this);
         }
@@ -88,7 +88,7 @@ namespace Amazon.QLDB.Driver
         /// <exception cref="TransactionAlreadyOpenException">Thrown if the transaction has already been opened.</exception>
         /// <exception cref="QldbDriverException">Thrown when called on a disposed instance.</exception>
         /// <exception cref="AmazonServiceException">Thrown when there is an error executing against QLDB.</exception>
-        public T Execute<T>(Func<TransactionExecutor, T> func)
+        internal T Execute<T>(Func<TransactionExecutor, T> func)
         {
             ValidationUtils.AssertNotNull(func, "func");
 
@@ -97,9 +97,9 @@ namespace Amazon.QLDB.Driver
             {
                 transaction = this.StartTransaction();
                 T returnedValue = func(new TransactionExecutor(transaction));
-                if (returnedValue is IResult)
+                if (returnedValue is IResult result)
                 {
-                    returnedValue = (T)(object)BufferedResult.BufferResult((IResult)returnedValue);
+                    returnedValue = (T)(object)BufferedResult.BufferResult(result);
                 }
 
                 transaction.Commit();
@@ -130,7 +130,7 @@ namespace Amazon.QLDB.Driver
             }
             catch (Exception e)
             {
-                throw new QldbTransactionException(transaction == null ? null : transaction.Id, this.TryAbort(transaction), e);
+                throw new QldbTransactionException(transaction?.Id, this.TryAbort(transaction), e);
             }
         }
 
@@ -139,7 +139,7 @@ namespace Amazon.QLDB.Driver
         /// </summary>
         ///
         /// <returns>The newly created transaction object.</returns>
-        public virtual ITransaction StartTransaction()
+        internal ITransaction StartTransaction()
         {
             try
             {

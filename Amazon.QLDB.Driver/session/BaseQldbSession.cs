@@ -18,7 +18,7 @@ namespace Amazon.QLDB.Driver
     /// <summary>
     /// Base class for QLDB Session.
     /// </summary>
-    public abstract class BaseQldbSession
+    internal abstract class BaseQldbSession
     {
         private protected readonly ILogger logger;
         private protected Session session;
@@ -31,7 +31,7 @@ namespace Amazon.QLDB.Driver
             this.isAlive = true;
         }
 
-        public bool IsAlive()
+        internal bool IsAlive()
         {
             return this.isAlive;
         }
@@ -47,7 +47,7 @@ namespace Amazon.QLDB.Driver
         /// <summary>
         /// Abstract method for releasing the session which can still be used by another transaction.
         /// </summary>
-        public abstract void Release();
+        internal abstract void Release();
 
         /// <summary>
         /// Retrieve the ID of this session..

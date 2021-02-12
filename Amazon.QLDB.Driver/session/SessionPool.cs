@@ -15,7 +15,6 @@ namespace Amazon.QLDB.Driver
 {
     using System;
     using System.Collections.Concurrent;
-    using System.Threading;
     using Microsoft.Extensions.Logging;
 
     /// <summary>
@@ -32,9 +31,15 @@ namespace Amazon.QLDB.Driver
         /// </summary>
         /// <param name="sessionCreator">The method to create a new underlying QLDB session.</param>
         /// <param name="retryHandler">Handling the retry logic of the execute call.</param>
-        /// <param name="maxConcurrentTransactions">The maximum number of sessions that can be created from the pool at any one time.</param>
+        /// <param name="maxConcurrentTransactions">
+        /// The maximum number of sessions that can be created from the pool at any one time.
+        /// </param>
         /// <param name="logger">Logger to be used by this.</param>
-        public SessionPool(Func<Session> sessionCreator, IRetryHandler retryHandler, int maxConcurrentTransactions, ILogger logger)
+        public SessionPool(
+            Func<Session> sessionCreator,
+            IRetryHandler retryHandler,
+            int maxConcurrentTransactions,
+            ILogger logger)
             : base(maxConcurrentTransactions, logger)
         {
             this.sessionPool = new BlockingCollection<QldbSession>(maxConcurrentTransactions);

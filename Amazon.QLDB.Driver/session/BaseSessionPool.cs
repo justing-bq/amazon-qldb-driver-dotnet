@@ -27,9 +27,12 @@ namespace Amazon.QLDB.Driver
         private protected bool isClosed = false;
 
         /// <summary>
+        /// Initializes a new instance of the <see cref="BaseSessionPool"/> class.
         /// Abstract base constructor to initialize a new instance of a session pool.
         /// </summary>
-        /// <param name="maxConcurrentTransactions">The maximum number of sessions that can be created from the pool at any one time.</param>
+        /// <param name="maxConcurrentTransactions">
+        /// The maximum number of sessions that can be created from the pool at any one time.
+        /// </param>
         /// <param name="logger">Logger to be used by this.</param>
         internal BaseSessionPool(int maxConcurrentTransactions, ILogger logger)
         {
