@@ -32,7 +32,7 @@ namespace Amazon.QLDB.Driver
         /// <param name="nextSessionAction">The action to get the next session.</param>
         /// <param name="retryAction">The custom retry action.</param>
         /// <param name="cancellationToken">
-        ///     A cancellation token that can be used by other objects or threads to receive notice of cancellation.
+        /// A cancellation token that can be used by other objects or threads to receive notice of cancellation.
         /// </param>
         ///
         /// <returns>The return value of the executed function.</returns>

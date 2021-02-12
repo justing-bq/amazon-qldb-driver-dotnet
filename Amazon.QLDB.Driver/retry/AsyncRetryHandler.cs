@@ -22,8 +22,8 @@ namespace Amazon.QLDB.Driver
     /// <summary>
     /// <para>The asynchronous implementation of Retry Handler.</para>
     ///
-    /// <para>The driver retries in two scenarios: retrying inside a session, and retrying with another session. In the second case,
-    /// it would require a <i>recover</i> action to reset the session into a working state.
+    /// <para>The driver retries in two scenarios: retrying inside a session, and retrying with another session. In the
+    /// second case, it would require a <i>recover</i> action to reset the session into a working state.
     /// </summary>
     internal class AsyncRetryHandler : BaseRetryHandler, IAsyncRetryHandler
     {
@@ -75,7 +75,8 @@ namespace Amazon.QLDB.Driver
                             await retryAction(retryAttempt, cancellationToken);
                         }
 
-                        var backoffDelay = retryPolicy.BackoffStrategy.CalculateDelay(new RetryPolicyContext(retryAttempt, iex));
+                        var backoffDelay =
+                            retryPolicy.BackoffStrategy.CalculateDelay(new RetryPolicyContext(retryAttempt, iex));
                         await Task.Delay(backoffDelay, cancellationToken);
 
                         if (!ex.IsSessionAlive)

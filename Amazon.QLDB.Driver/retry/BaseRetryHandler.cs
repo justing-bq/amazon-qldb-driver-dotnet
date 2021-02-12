@@ -26,8 +26,10 @@ namespace Amazon.QLDB.Driver
         private protected readonly ILogger logger;
 
         /// <summary>
-        /// Initializes a new instance of a retry handler class.
+        /// Initializes a new instance of the <see cref="BaseRetryHandler"/> class.
         /// </summary>
+        ///
+        /// <param name="logger">Logger for this retry handler to use.</param>
         internal BaseRetryHandler(ILogger logger)
         {
             this.logger = logger;

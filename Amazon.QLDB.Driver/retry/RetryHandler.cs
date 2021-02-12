@@ -21,14 +21,15 @@ namespace Amazon.QLDB.Driver
     /// <summary>
     /// <para>The default implementation of Retry Handler.</para>
     ///
-    /// <para>The driver retries in two scenarios: retrying inside a session, and retrying with another session. In the second case,
-    /// it would require a <i>recover</i> action to reset the session into a working state.
+    /// <para>The driver retries in two scenarios: retrying inside a session, and retrying with another session. In the
+    /// second case, it would require a <i>recover</i> action to reset the session into a working state.
     /// </summary>
     internal class RetryHandler : BaseRetryHandler, IRetryHandler
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="RetryHandler"/> class.
         /// </summary>
+        ///
         /// <param name="logger">The logger to record retries.</param>
         public RetryHandler(ILogger logger)
             : base(logger)
@@ -36,7 +37,12 @@ namespace Amazon.QLDB.Driver
         }
 
         /// <inheritdoc/>
-        public T RetriableExecute<T>(Func<T> func, RetryPolicy retryPolicy, Action newSessionAction, Action nextSessionAction, Action<int> retryAction)
+        public T RetriableExecute<T>(
+            Func<T> func,
+            RetryPolicy retryPolicy,
+            Action newSessionAction,
+            Action nextSessionAction,
+            Action<int> retryAction)
         {
             int retryAttempt = 0;
 
@@ -58,14 +64,15 @@ namespace Amazon.QLDB.Driver
                     if (retryAttempt < retryPolicy.MaxRetries && !IsTransactionExpiry(iex))
                     {
                         this.logger?.LogWarning(
-                                iex,
-                                "A recoverable exception has occurred. Attempting retry {}. Errored Transaction ID: {}.",
-                                ++retryAttempt,
-                                TryGetTransactionId(ex));
+                            iex,
+                            "A recoverable exception has occurred. Attempting retry {}. Errored Transaction ID: {}.",
+                            ++retryAttempt,
+                            TryGetTransactionId(ex));
 
                         retryAction?.Invoke(retryAttempt);
 
-                        Thread.Sleep(retryPolicy.BackoffStrategy.CalculateDelay(new RetryPolicyContext(retryAttempt, iex)));
+                        Thread.Sleep(
+                            retryPolicy.BackoffStrategy.CalculateDelay(new RetryPolicyContext(retryAttempt, iex)));
 
                         if (!ex.IsSessionAlive)
                         {
