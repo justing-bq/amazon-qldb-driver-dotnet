@@ -1,3 +1,7 @@
+## Release v1.2.0
+
+* C# version updated to 9.0.0 minimum
+
 ## Release v1.1.0
 
 v1.1 adds support for obtaining basic server-side statistics on individual statement executions.
