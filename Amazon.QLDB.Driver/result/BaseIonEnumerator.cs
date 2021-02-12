@@ -25,18 +25,18 @@ namespace Amazon.QLDB.Driver
     /// </summary>
     internal abstract class BaseIonEnumerator
     {
+        private protected readonly Session session;
+        private protected readonly string txnId;
+        private protected IEnumerator<ValueHolder> currentEnumerator;
+        private protected string nextPageToken;
+        private protected long? readIOs = null;
+        private protected long? writeIOs = null;
+        private protected long? processingTimeMilliseconds = null;
+
         private static readonly IonLoader IonLoader = IonLoader.Default;
 
-        protected readonly Session session;
-        protected readonly string txnId;
-        protected IEnumerator<ValueHolder> currentEnumerator;
-        protected string nextPageToken;
-        protected long? readIOs = null;
-        protected long? writeIOs = null;
-        protected long? processingTimeMilliseconds = null;
-
         /// <summary>
-        /// Abstract base constructor to initialize a new ion enumerator.
+        /// Initializes a new instance of the <see cref="BaseIonEnumerator"/> class.
         /// </summary>
         ///
         /// <param name="session">The parent session that represents the communication channel to QLDB.</param>
@@ -116,7 +116,9 @@ namespace Amazon.QLDB.Driver
         /// <summary>
         /// Update the metrics.
         /// </summary>
-        protected void UpdateMetrics(FetchPageResult pageResult)
+        ///
+        /// <param name="pageResult">The result of a fetch page command.</param>
+        private protected void UpdateMetrics(FetchPageResult pageResult)
         {
             if (pageResult.ConsumedIOs != null)
             {

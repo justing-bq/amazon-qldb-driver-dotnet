@@ -1,6 +1,6 @@
-## Release v1.1.1
+## Release v1.2.0
 
-Using dot net version 9.0.
+* C# version updated to 9.0.0 minimum
 
 ## Release v1.1.0
 

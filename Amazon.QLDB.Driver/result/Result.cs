@@ -37,6 +37,7 @@ namespace Amazon.QLDB.Driver
         /// </summary>
         ///
         /// <param name="session">The parent session that represents the communication channel to QLDB.</param>
+        /// <param name="txnId">The ID of the parent transaction.</param>
         /// <param name="statementResult">The result of the statement execution.</param>
         internal Result(Session session, string txnId, ExecuteStatementResult statementResult)
         {

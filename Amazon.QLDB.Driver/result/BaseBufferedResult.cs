@@ -21,14 +21,21 @@ namespace Amazon.QLDB.Driver
     /// </summary>
     public abstract class BaseBufferedResult
     {
-        protected readonly List<IIonValue> values;
-        protected readonly IOUsage? consumedIOs;
-        protected readonly TimingInformation? timingInformation;
+        private protected readonly List<IIonValue> values;
+        private protected readonly IOUsage? consumedIOs;
+        private protected readonly TimingInformation? timingInformation;
 
         /// <summary>
-        /// Initializes a new instance of a buffered result class.
+        /// Initializes a new instance of the <see cref="BaseBufferedResult"/> class.
         /// </summary>
-        protected BaseBufferedResult(List<IIonValue> values, IOUsage? consumedIOs, TimingInformation? timingInformation)
+        ///
+        /// <param name="values">Buffer values.</param>
+        /// <param name="consumedIOs">IOUsage statistics.</param>
+        /// <param name="timingInformation">TimingInformation statistics.</param>
+        private protected BaseBufferedResult(
+            List<IIonValue> values,
+            IOUsage? consumedIOs,
+            TimingInformation? timingInformation)
         {
             this.values = values;
             this.consumedIOs = consumedIOs;

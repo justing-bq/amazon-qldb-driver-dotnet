@@ -18,7 +18,8 @@ namespace Amazon.QLDB.Driver
     using Amazon.IonDotnet.Tree;
 
     /// <summary>
-    /// Implementation of a result which buffers all values in memory, rather than stream them from QLDB during retrieval.
+    /// Implementation of a result which buffers all values in memory, rather than stream them from QLDB during
+    /// retrieval.
     /// This implementation should only be used when the result is to be returned after the parent transaction is to be
     /// committed.
     /// </summary>

@@ -19,7 +19,8 @@ namespace Amazon.QLDB.Driver
     using Amazon.IonDotnet.Tree;
 
     /// <summary>
-    /// Implementation of a result which asynchronously buffers all values in memory, rather than stream them from QLDB during retrieval.
+    /// Implementation of a result which asynchronously buffers all values in memory, rather than stream them from QLDB
+    /// during retrieval.
     /// This implementation should only be used when the result is to be returned after the parent transaction is to be
     /// committed.
     /// </summary>
@@ -38,7 +39,8 @@ namespace Amazon.QLDB.Driver
         }
 
         /// <summary>
-        /// Constructor for the result which asynchronously buffers into the memory the supplied result before closing it.
+        /// Constructor for the result which asynchronously buffers into the memory the supplied result before closing
+        /// it.
         /// </summary>
         ///
         /// <param name="result">The result which is to be buffered into memory and closed.</param>
@@ -58,14 +60,19 @@ namespace Amazon.QLDB.Driver
         /// <summary>
         /// Returns an enumerator that iterates through a collection.
         /// </summary>
-        /// <returns>An <see cref="IAsyncEnumerator"/> object that can be used to iterate through the collection.</returns>
+        ///
+        /// <param name="cancellationToken">Cancellation token.</param>
+        ///
+        /// <returns>
+        /// An <see cref="IAsyncEnumerator"/> object that can be used to iterate through the collection.
+        /// </returns>
         public IAsyncEnumerator<IIonValue> GetAsyncEnumerator(CancellationToken cancellationToken = default)
         {
             return new ValuesAsyncEnumerator(this.values);
         }
 
         /// <summary>
-        /// Asynchronously enumerates and list of Ion values.
+        /// Asynchronously enumerates a list of Ion values.
         /// </summary>
         private struct ValuesAsyncEnumerator : IAsyncEnumerator<IIonValue>
         {

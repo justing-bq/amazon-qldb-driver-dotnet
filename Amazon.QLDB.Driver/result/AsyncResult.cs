@@ -38,10 +38,16 @@ namespace Amazon.QLDB.Driver
         /// </summary>
         ///
         /// <param name="session">The parent session that represents the communication channel to QLDB.</param>
+        /// <param name="txnId">The ID of the parent transaction.</param>
         /// <param name="statementResult">The result of the statement execution.</param>
-        internal AsyncResult(Session session, string txnId, ExecuteStatementResult statementResult)
+        /// <param name="cancellationToken">The CancellationToken to use for this AsyncResult.</param>
+        internal AsyncResult(
+            Session session,
+            string txnId,
+            ExecuteStatementResult statementResult,
+            CancellationToken cancellationToken)
         {
-            this.ionEnumerator = new IonAsyncEnumerator(session, txnId, statementResult);
+            this.ionEnumerator = new IonAsyncEnumerator(session, txnId, statementResult, cancellationToken);
         }
 
         /// <inheritdoc/>
@@ -53,6 +59,11 @@ namespace Amazon.QLDB.Driver
             }
 
             this.isRetrieved = true;
+            if (cancellationToken != default)
+            {
+                this.ionEnumerator.CancellationToken = cancellationToken;
+            }
+
             return this.ionEnumerator;
         }
 
@@ -77,11 +88,13 @@ namespace Amazon.QLDB.Driver
         }
 
         /// <summary>
-        /// Object which allows for asynchronous iteration over the individual Ion values that make up the whole result of a statement
-        /// execution against QLDB.
+        /// Object which allows for asynchronous iteration over the individual Ion values that make up the whole result
+        /// of a statement execution against QLDB.
         /// </summary>
         private class IonAsyncEnumerator : BaseIonEnumerator, IAsyncEnumerator<IIonValue>
         {
+            internal CancellationToken CancellationToken;
+
             /// <summary>
             /// Initializes a new instance of the <see cref="IonAsyncEnumerator"/> class.
             /// </summary>
@@ -89,9 +102,14 @@ namespace Amazon.QLDB.Driver
             /// <param name="session">The parent session that represents the communication channel to QLDB.</param>
             /// <param name="txnId">The unique ID of the transaction.</param>
             /// <param name="statementResult">The result of the statement execution.</param>
-            internal IonAsyncEnumerator(Session session, string txnId, ExecuteStatementResult statementResult)
+            internal IonAsyncEnumerator(
+                Session session,
+                string txnId,
+                ExecuteStatementResult statementResult,
+                CancellationToken cancellationToken)
                 : base(session, txnId, statementResult)
             {
+                this.CancellationToken = cancellationToken;
             }
 
             /// <summary>
@@ -126,7 +144,8 @@ namespace Amazon.QLDB.Driver
             /// </summary>
             private async Task FetchPage()
             {
-                FetchPageResult pageResult = await this.session.FetchPageAsync(this.txnId, this.nextPageToken);
+                FetchPageResult pageResult =
+                    await this.session.FetchPageAsync(this.txnId, this.nextPageToken, this.CancellationToken);
                 this.currentEnumerator = pageResult.Page.Values.GetEnumerator();
                 this.nextPageToken = pageResult.Page.NextPageToken;
                 this.UpdateMetrics(pageResult);
