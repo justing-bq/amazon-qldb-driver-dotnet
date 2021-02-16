@@ -13,49 +13,19 @@
 
 namespace Amazon.QLDB.Driver
 {
+    using System;
     using Microsoft.Extensions.Logging;
 
-    /// <summary>
-    /// Builder object for creating an <see cref="AsyncQldbDriver"/>, allowing for configuration of the parameters of
-    /// construction.
-    /// </summary>
-    public class AsyncQldbDriverBuilder : BaseQldbDriverBuilder<AsyncQldbDriverBuilder>
+    public class AsyncQldbDriverBuilder
     {
-        /// <summary>
-        /// Initializes a new instance of the <see cref="AsyncQldbDriverBuilder"/> class.
-        /// </summary>
-        internal AsyncQldbDriverBuilder()
-        {
-        }
-
-        private protected override AsyncQldbDriverBuilder BuilderInstance => this;
-
-        private protected override string UserAgentStringPrefix => "Async QLDB Driver for .NET v";
-
-        /// <summary>
-        /// Build a driver instance using the current configuration set with the builder.
-        /// </summary>
-        ///
-        /// <returns>A newly created driver.</returns>
         public AsyncQldbDriver Build()
         {
-            this.PrepareBuild();
-            return new AsyncQldbDriver(
-                new AsyncSessionPool(
-                    (cancellationToken) => Session.StartSessionAsync(this.LedgerName, this.sessionClient, this.Logger),
-                    CreateDefaultRetryHandler(this.logRetries ? this.Logger : null),
-                    this.maxConcurrentTransactions,
-                    this.Logger));
+            throw new NotImplementedException();
         }
 
-        /// <summary>
-        /// Create an AsyncRetryHandler object with the default set of retriable exceptions.
-        /// </summary>
-        /// <param name="logger">The logger.</param>
-        /// <returns>The constructed IRetryHandler instance.</returns>
         internal static IAsyncRetryHandler CreateDefaultRetryHandler(ILogger logger)
         {
-            return new AsyncRetryHandler(logger);
+            throw new NotImplementedException();
         }
     }
 }

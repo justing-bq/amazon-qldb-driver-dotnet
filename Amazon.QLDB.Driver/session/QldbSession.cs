@@ -44,9 +44,12 @@ namespace Amazon.QLDB.Driver
     /// </list>
     /// </para>
     /// </summary>
-    internal class QldbSession : BaseQldbSession
+    internal class QldbSession
     {
+        private readonly ILogger logger;
         private readonly Action<QldbSession> releaseSession;
+        private Session session;
+        private bool isAlive;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="QldbSession"/> class.
@@ -56,15 +59,30 @@ namespace Amazon.QLDB.Driver
         /// <param name="releaseSession">The delegate method to release the session.</param>
         /// <param name="logger">The logger to be used by this.</param>
         internal QldbSession(Session session, Action<QldbSession> releaseSession, ILogger logger)
-            : base(session, logger)
         {
+            this.session = session;
             this.releaseSession = releaseSession;
+            this.logger = logger;
+            this.isAlive = true;
+        }
+
+        public bool IsAlive()
+        {
+            return this.isAlive;
+        }
+
+        /// <summary>
+        /// Close the internal session object.
+        /// </summary>
+        public void Close()
+        {
+            this.session.End();
         }
 
         /// <summary>
         /// Release the session which still can be used by another transaction.
         /// </summary>
-        internal override void Release()
+        public void Release()
         {
             this.releaseSession(this);
         }
@@ -88,20 +106,18 @@ namespace Amazon.QLDB.Driver
         /// <exception cref="TransactionAlreadyOpenException">Thrown if the transaction has already been opened.</exception>
         /// <exception cref="QldbDriverException">Thrown when called on a disposed instance.</exception>
         /// <exception cref="AmazonServiceException">Thrown when there is an error executing against QLDB.</exception>
-        internal T Execute<T>(Func<TransactionExecutor, T> func)
+        public T Execute<T>(Func<TransactionExecutor, T> func)
         {
             ValidationUtils.AssertNotNull(func, "func");
 
             ITransaction transaction = null;
-            string transactionId = "None";
             try
             {
                 transaction = this.StartTransaction();
-                transactionId = transaction.Id;
                 T returnedValue = func(new TransactionExecutor(transaction));
-                if (returnedValue is IResult result)
+                if (returnedValue is IResult)
                 {
-                    returnedValue = (T)(object)BufferedResult.BufferResult(result);
+                    returnedValue = (T)(object)BufferedResult.BufferResult((IResult)returnedValue);
                 }
 
                 transaction.Commit();
@@ -110,21 +126,21 @@ namespace Amazon.QLDB.Driver
             catch (InvalidSessionException ise)
             {
                 this.isAlive = false;
-                throw new RetriableException(transactionId, false, ise);
+                throw new RetriableException(transaction.Id, false, ise);
             }
             catch (OccConflictException occ)
             {
-                throw new RetriableException(transactionId, occ);
+                throw new RetriableException(transaction.Id, occ);
             }
             catch (AmazonServiceException ase)
             {
                 if (ase.StatusCode == HttpStatusCode.InternalServerError ||
                     ase.StatusCode == HttpStatusCode.ServiceUnavailable)
                 {
-                    throw new RetriableException(transactionId, this.TryAbort(transaction), ase);
+                    throw new RetriableException(transaction.Id, this.TryAbort(transaction), ase);
                 }
 
-                throw new QldbTransactionException(transactionId, this.TryAbort(transaction), ase);
+                throw new QldbTransactionException(transaction.Id, this.TryAbort(transaction), ase);
             }
             catch (QldbTransactionException te)
             {
@@ -132,7 +148,7 @@ namespace Amazon.QLDB.Driver
             }
             catch (Exception e)
             {
-                throw new QldbTransactionException(transactionId, this.TryAbort(transaction), e);
+                throw new QldbTransactionException(transaction == null ? null : transaction.Id, this.TryAbort(transaction), e);
             }
         }
 
@@ -141,7 +157,7 @@ namespace Amazon.QLDB.Driver
         /// </summary>
         ///
         /// <returns>The newly created transaction object.</returns>
-        internal ITransaction StartTransaction()
+        public virtual ITransaction StartTransaction()
         {
             try
             {
@@ -152,6 +168,16 @@ namespace Amazon.QLDB.Driver
             {
                 throw new QldbTransactionException(ExceptionMessages.TransactionAlreadyOpened, string.Empty, this.TryAbort(null), e);
             }
+        }
+
+        /// <summary>
+        /// Retrieve the ID of this session..
+        /// </summary>
+        ///
+        /// <returns>The ID of this session.</returns>
+        internal string GetSessionId()
+        {
+            return this.session.SessionId;
         }
 
         /// <summary>

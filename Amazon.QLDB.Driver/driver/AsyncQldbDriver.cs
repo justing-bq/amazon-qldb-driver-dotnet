@@ -15,74 +15,55 @@ namespace Amazon.QLDB.Driver
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
     using System.Threading;
     using System.Threading.Tasks;
 
-    public class AsyncQldbDriver : BaseQldbDriver, IAsyncQldbDriver
+    public class AsyncQldbDriver : IAsyncDisposable
     {
-        private readonly AsyncSessionPool sessionPool;
-
-        internal AsyncQldbDriver(AsyncSessionPool sessionPool)
-        {
-            this.sessionPool = sessionPool;
-        }
-
-        public static AsyncQldbDriverBuilder Builder()
-        {
-            return new AsyncQldbDriverBuilder();
-        }
-
-        public void Dispose()
-        {
-            this.sessionPool.Dispose();
-        }
-
-        public async Task Execute(
-            Func<AsyncTransactionExecutor, Task> action,
-            CancellationToken cancellationToken = default)
-        {
-            await this.Execute(action, BaseQldbDriver.DefaultRetryPolicy, cancellationToken);
-        }
-
-        public async Task Execute(
-            Func<AsyncTransactionExecutor, Task> action,
-            RetryPolicy retryPolicy,
-            CancellationToken cancellationToken = default)
-        {
-            await this.Execute(
-                async txn =>
-                {
-                    await action.Invoke(txn);
-                    return false;
-                },
-                retryPolicy,
-                cancellationToken);
-        }
-
-        public async Task<T> Execute<T>(
-            Func<AsyncTransactionExecutor, Task<T>> func, CancellationToken cancellationToken = default)
-        {
-            return await this.Execute<T>(func, BaseQldbDriver.DefaultRetryPolicy, cancellationToken);
-        }
-
-        public async Task<T> Execute<T>(
-            Func<AsyncTransactionExecutor, Task<T>> func,
-            RetryPolicy retryPolicy,
-            CancellationToken cancellationToken = default)
-        {
-            return await this.sessionPool.Execute<T>(func, retryPolicy, cancellationToken);
-        }
-
         public async Task<IEnumerable<string>> ListTableNamesAsync(CancellationToken cancellationToken = default)
         {
-            IAsyncResult result = await this.Execute<IAsyncResult>(
-                async txn =>
-                {
-                    return await txn.Execute(TableNameQuery);
-                }, cancellationToken);
+            throw new NotImplementedException();
+        }
 
-            return (await result.ToListAsync()).Select(i => i.StringValue);
+        public ValueTask DisposeAsync()
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task Execute(Func<TransactionExecutor, Task> action, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task Execute(
+            Func<TransactionExecutor, Task> action,
+            RetryPolicy retryPolicy,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task<T> Execute<T>(
+            Func<TransactionExecutor, Task<T>> func, CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        public async Task<T> Execute<T>(
+            Func<TransactionExecutor, Task<T>> func,
+            RetryPolicy retryPolicy,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
+        }
+
+        internal async Task<T> Execute<T>(
+            Func<AsyncTransactionExecutor, Task<T>> func,
+            RetryPolicy retryPolicy,
+            Action<int> retryAction,
+            CancellationToken cancellationToken = default)
+        {
+            throw new NotImplementedException();
         }
     }
 }

@@ -27,8 +27,12 @@ namespace Amazon.QLDB.Driver
     /// amount of connections the session client allows set in the <see cref="ClientConfig"/>. <see cref="Dispose"/>
     /// should be called when this factory is no longer needed in order to clean up resources, ending all sessions in the pool.</para>
     /// </summary>
-    public class QldbDriver : BaseQldbDriver, IQldbDriver
+    public class QldbDriver : IQldbDriver
     {
+        internal const string TableNameQuery =
+                "SELECT VALUE name FROM information_schema.user_tables WHERE status = 'ACTIVE'";
+
+        private static readonly RetryPolicy DefaultRetryPolicy = RetryPolicy.Builder().Build();
         private readonly SessionPool sessionPool;
 
         /// <summary>

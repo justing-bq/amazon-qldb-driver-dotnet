@@ -13,39 +13,96 @@
 
 namespace Amazon.QLDB.Driver
 {
-    using System;
     using System.Collections.Generic;
     using System.Threading;
     using System.Threading.Tasks;
     using Amazon.IonDotnet.Tree;
+    using Amazon.Runtime;
 
-    public class AsyncTransactionExecutor
+    /// <summary>
+    /// Asynchronous transaction object used within lambda executions to provide a reduced view that allows only the operations that are
+    /// valid within the context of an active managed transaction.
+    /// </summary>
+    public class AsyncTransactionExecutor : IAsyncExecutable
     {
+        private readonly AsyncTransaction transaction;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AsyncTransactionExecutor"/> class.
+        /// </summary>
+        ///
+        /// <param name="transaction">The <see cref="AsyncTransaction"/> object the <see cref="AsyncTransactionExecutor"/> wraps.</param>
         internal AsyncTransactionExecutor(AsyncTransaction transaction)
         {
-            throw new NotImplementedException();
+            this.transaction = transaction;
         }
 
-        public Task<IAsyncResult> Execute(string statement)
+        /// <summary>
+        /// Asynchronously execute the statement against QLDB and retrieve the result.
+        /// </summary>
+        ///
+        /// <param name="statement">The PartiQL statement to be executed against QLDB.</param>
+        /// <param name="cancellationToken">Propagates notification that operations should be canceled.</param>
+        ///
+        /// <returns>Result from executed statement.</returns>
+        ///
+        /// <exception cref="AmazonServiceException">Thrown when there is an error executing against QLDB.</exception>
+        public async Task<IAsyncResult> Execute(string statement, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            return await this.transaction.Execute(statement, cancellationToken);
         }
 
-        public Task<IAsyncResult> Execute(
-            string statement, List<IIonValue> parameters)
+        /// <summary>
+        /// Asynchronously execute the statement using the specified parameters against QLDB and retrieve the result.
+        /// </summary>
+        ///
+        /// <param name="statement">The PartiQL statement to be executed against QLDB.</param>
+        /// <param name="parameters">Parameters to execute.</param>
+        /// <param name="cancellationToken">Propagates notification that operations should be canceled.</param>
+        ///
+        /// <returns>Result from executed statement.</returns>
+        ///
+        /// <exception cref="AmazonServiceException">Thrown when there is an error executing against QLDB.</exception>
+        public async Task<IAsyncResult> Execute(
+            string statement, List<IIonValue> parameters, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            return await this.transaction.Execute(statement, parameters, cancellationToken);
         }
 
-        public Task<IAsyncResult> Execute(
-            string statement, params IIonValue[] parameters)
+        /// <summary>
+        /// Asynchronously execute the statement using the specified parameters against QLDB and retrieve the result.
+        /// </summary>
+        ///
+        /// <param name="statement">The PartiQL statement to be executed against QLDB.</param>
+        /// <param name="cancellationToken">Propagates notification that operations should be canceled.</param>
+        /// <param name="parameters">Parameters to execute.</param>
+        ///
+        /// <returns>Result from executed statement.</returns>
+        ///
+        /// <exception cref="AmazonServiceException">Thrown when there is an error executing against QLDB.</exception>
+        public async Task<IAsyncResult> Execute(
+            string statement, CancellationToken cancellationToken = default, params IIonValue[] parameters)
         {
-            throw new NotImplementedException();
+            return await this.transaction.Execute(statement, cancellationToken, parameters);
         }
 
-        public Task Abort()
+        /// <summary>
+        /// Asynchronously abort the transaction and roll back any changes.
+        /// </summary>
+        ///
+        /// <param name="cancellationToken">Propagates notification that operations should be canceled.</param>
+        ///
+        internal async void Abort(CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            try
+            {
+                await this.transaction.Abort(cancellationToken);
+                throw new TransactionAbortedException(this.transaction.Id, true);
+            }
+            catch (AmazonServiceException ase)
+            {
+                throw new TransactionAbortedException(this.transaction.Id, false, ase);
+            }
         }
     }
 }

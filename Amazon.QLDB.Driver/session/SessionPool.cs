@@ -15,36 +15,36 @@ namespace Amazon.QLDB.Driver
 {
     using System;
     using System.Collections.Concurrent;
+    using System.Threading;
     using Microsoft.Extensions.Logging;
 
     /// <summary>
     /// The implementation of the session pool.
     /// </summary>
-    internal class SessionPool : BaseSessionPool
+    internal class SessionPool
     {
+        private const int DefaultTimeoutInMs = 1;
         private readonly BlockingCollection<QldbSession> sessionPool;
+        private readonly SemaphoreSlim poolPermits;
         private readonly Func<Session> sessionCreator;
         private readonly IRetryHandler retryHandler;
+        private readonly ILogger logger;
+        private bool isClosed = false;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SessionPool"/> class.
         /// </summary>
         /// <param name="sessionCreator">The method to create a new underlying QLDB session.</param>
         /// <param name="retryHandler">Handling the retry logic of the execute call.</param>
-        /// <param name="maxConcurrentTransactions">
-        /// The maximum number of sessions that can be created from the pool at any one time.
-        /// </param>
+        /// <param name="maxConcurrentTransactions">The maximum number of sessions that can be created from the pool at any one time.</param>
         /// <param name="logger">Logger to be used by this.</param>
-        public SessionPool(
-            Func<Session> sessionCreator,
-            IRetryHandler retryHandler,
-            int maxConcurrentTransactions,
-            ILogger logger)
-            : base(maxConcurrentTransactions, logger)
+        public SessionPool(Func<Session> sessionCreator, IRetryHandler retryHandler, int maxConcurrentTransactions, ILogger logger)
         {
             this.sessionPool = new BlockingCollection<QldbSession>(maxConcurrentTransactions);
+            this.poolPermits = new SemaphoreSlim(maxConcurrentTransactions, maxConcurrentTransactions);
             this.sessionCreator = sessionCreator;
             this.retryHandler = retryHandler;
+            this.logger = logger;
         }
 
         /// <summary>
@@ -94,12 +94,12 @@ namespace Amazon.QLDB.Driver
         }
 
         /// <summary>
-        /// <para>Get a <see cref="QldbSession"/> object.</para>
+        /// <para>Get a <see cref="IQldbSession"/> object.</para>
         ///
         /// <para>This will attempt to retrieve an active existing session, or it will start a new session with QLDB unless the
         /// number of allocated sessions has exceeded the pool size limit.</para>
         /// </summary>
-        /// <returns>The <see cref="QldbSession"/> object.</returns>
+        /// <returns>The <see cref="IQldbSession"/> object.</returns>
         ///
         /// <exception cref="QldbDriverException">Thrown when this driver has been disposed or timeout.</exception>
         internal QldbSession GetSession()
@@ -140,6 +140,11 @@ namespace Amazon.QLDB.Driver
                 this.logger.LogError(ExceptionMessages.SessionPoolEmpty);
                 throw new QldbDriverException(ExceptionMessages.SessionPoolEmpty);
             }
+        }
+
+        internal int AvailablePermit()
+        {
+            return this.poolPermits.CurrentCount;
         }
 
         private void ReleaseSession(QldbSession session)

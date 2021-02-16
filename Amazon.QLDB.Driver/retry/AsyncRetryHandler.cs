@@ -16,81 +16,18 @@ namespace Amazon.QLDB.Driver
     using System;
     using System.Threading;
     using System.Threading.Tasks;
-    using Amazon.QLDBSession.Model;
-    using Microsoft.Extensions.Logging;
 
-    /// <summary>
-    /// <para>The asynchronous implementation of Retry Handler.</para>
-    ///
-    /// <para>The driver retries in two scenarios: retrying inside a session, and retrying with another session. In the
-    /// second case, it would require a <i>recover</i> action to reset the session into a working state.
-    /// </summary>
-    internal class AsyncRetryHandler : BaseRetryHandler, IAsyncRetryHandler
+    internal class AsyncRetryHandler : IAsyncRetryHandler
     {
-        /// <summary>
-        /// Initializes a new instance of the <see cref="AsyncRetryHandler"/> class.
-        /// </summary>
-        /// <param name="logger">The logger to record retries.</param>
-        public AsyncRetryHandler(ILogger logger)
-            : base(logger)
-        {
-        }
-
-        /// <inheritdoc/>
         public async Task<T> RetriableExecute<T>(
-            Func<CancellationToken, Task<T>> func,
+            Func<Task<T>> func,
             RetryPolicy retryPolicy,
-            Func<CancellationToken, Task> newSessionAction,
-            Func<CancellationToken, Task> nextSessionAction,
+            Func<Task> newSessionAction,
+            Func<Task> nextSessionAction,
+            Action<int> retryAction,
             CancellationToken cancellationToken = default)
         {
-            int retryAttempt = 0;
-
-            while (true)
-            {
-                try
-                {
-                    return await func(cancellationToken);
-                }
-                catch (QldbTransactionException ex)
-                {
-                    var iex = ex.InnerException ?? ex;
-
-                    if (!(ex is RetriableException))
-                    {
-                        throw iex;
-                    }
-
-                    if (retryAttempt < retryPolicy.MaxRetries && !IsTransactionExpiry(iex))
-                    {
-                        this.logger?.LogWarning(
-                            iex,
-                            "A recoverable exception has occurred. Attempting retry {}. Errored Transaction ID: {}.",
-                            ++retryAttempt,
-                            TryGetTransactionId(ex));
-
-                        var backoffDelay =
-                            retryPolicy.BackoffStrategy.CalculateDelay(new RetryPolicyContext(retryAttempt, iex));
-                        await Task.Delay(backoffDelay, cancellationToken);
-
-                        if (!ex.IsSessionAlive)
-                        {
-                            if (iex is InvalidSessionException)
-                            {
-                                await newSessionAction(cancellationToken);
-                            }
-                            else
-                            {
-                                await nextSessionAction(cancellationToken);
-                            }
-                        }
-
-                        continue;
-                    }
-
-                    throw iex;
-                }
-            }
+            throw new NotImplementedException();
         }
     }
 }

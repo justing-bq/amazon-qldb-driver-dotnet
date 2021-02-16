@@ -18,38 +18,39 @@ namespace Amazon.QLDB.Driver
     using System.Threading;
     using System.Threading.Tasks;
     using Amazon.IonDotnet.Tree;
-    using Microsoft.Extensions.Logging;
 
     internal class AsyncTransaction
     {
-        internal AsyncTransaction(Session session, string txnId, ILogger logger, CancellationToken cancellationToken)
+        public string Id => throw new NotImplementedException();
+
+        public async Task Abort(CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
         }
 
-        internal string Id => throw new NotImplementedException();
-
-        internal async Task Abort()
+        public async Task Commit(CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
         }
 
-        internal async Task Commit()
+        public async ValueTask DisposeAsync()
         {
             throw new NotImplementedException();
         }
 
-        internal async Task<IAsyncResult> Execute(string statement)
+        public async Task<IAsyncResult> Execute(string statement, CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
         }
 
-        internal async Task<IAsyncResult> Execute(string statement, List<IIonValue> parameters)
+        public async Task<IAsyncResult> Execute(
+            string statement, List<IIonValue> parameters, CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();
         }
 
-        internal async Task<IAsyncResult> Execute(string statement, params IIonValue[] parameters)
+        public async Task<IAsyncResult> Execute(
+            string statement, CancellationToken cancellationToken = default, params IIonValue[] parameters)
         {
             throw new NotImplementedException();
         }
