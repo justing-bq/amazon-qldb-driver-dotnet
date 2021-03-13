@@ -14,31 +14,52 @@
 namespace Amazon.QLDB.Driver
 {
     using System;
+    using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Linq;
+    using System.Threading;
+    using Amazon.QLDBSession;
+    using Amazon.QLDBSession.Model;
     using Amazon.Runtime;
+    using Microsoft.Extensions.Logging;
 
     /// <summary>
     /// <para>Represents a factory for accessing a specific ledger within QLDB. This class or
     /// <see cref="AsyncQldbDriver"/> should be the main entry points to any interaction with QLDB.</para>
     ///
-    /// <para>This factory pools sessions and attempts to return unused but available sessions when getting new sessions.
+    /// <para>
+    /// This factory pools sessions and attempts to return unused but available sessions when getting new sessions.
     /// The pool does not remove stale sessions until a new session is retrieved. The default pool size is the maximum
     /// amount of connections the session client allows set in the <see cref="ClientConfig"/>. <see cref="Dispose"/>
-    /// should be called when this factory is no longer needed in order to clean up resources, ending all sessions in the pool.</para>
+    /// should be called when this factory is no longer needed in order to clean up resources, ending all sessions in
+    /// the pool.
+    /// </para>
     /// </summary>
     public class QldbDriver : BaseQldbDriver, IQldbDriver
     {
-        private readonly SessionPool sessionPool;
+        private readonly string ledgerName;
+        private readonly AmazonQLDBSessionClient sessionClient;
+        private readonly ILogger logger;
+        private readonly SemaphoreSlim poolPermits;
+        private readonly BlockingCollection<QldbSession> sessionPool;
+        private bool isClosed = false;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="QldbDriver"/> class.
         /// </summary>
         ///
         /// <param name="sessionPool">The ledger to create sessions to.</param>
-        internal QldbDriver(SessionPool sessionPool)
+        internal QldbDriver(
+            string ledgerName,
+            AmazonQLDBSessionClient sessionClient,
+            int maxConcurrentTransactions,
+            ILogger logger)
         {
-            this.sessionPool = sessionPool;
+            this.ledgerName = ledgerName;
+            this.sessionClient = sessionClient;
+            this.logger = logger;
+            this.poolPermits = new SemaphoreSlim(maxConcurrentTransactions, maxConcurrentTransactions);
+            this.sessionPool = new BlockingCollection<QldbSession>(maxConcurrentTransactions);
         }
 
         /// <summary>
@@ -52,34 +73,46 @@ namespace Amazon.QLDB.Driver
         }
 
         /// <summary>
-        /// Start a session, then execute the Executor lambda against QLDB within a transaction where no result is expected,
-        /// and end the session.
+        /// Start a session, then execute the Executor lambda against QLDB within a transaction where no result is
+        /// expected, and end the session.
         /// </summary>
         ///
-        /// <param name="action">The Executor lambda with no return value representing the block of code to be executed within the transaction.
-        /// This cannot have any side effects as it may be invoked multiple times.</param>
+        /// <param name="action">The Executor lambda with no return value representing the block of code to be executed
+        /// within the transaction. This cannot have any side effects as it may be invoked multiple times.</param>
         ///
-        /// <exception cref="TransactionAbortedException">Thrown if the Executor lambda calls <see cref="TransactionExecutor.Abort"/>.</exception>
-        /// <exception cref="QldbDriverException">Thrown when called on a disposed instance.</exception>
-        /// <exception cref="AmazonServiceException">Thrown when there is an error executing against QLDB.</exception>
+        /// <exception cref="TransactionAbortedException">
+        /// Thrown if the Executor lambda calls <see cref="TransactionExecutor.Abort"/>.
+        /// </exception>
+        /// <exception cref="QldbDriverException">
+        /// Thrown when called on a disposed instance.
+        /// </exception>
+        /// <exception cref="AmazonServiceException">
+        /// Thrown when there is an error executing against QLDB.
+        /// </exception>
         public void Execute(Action<TransactionExecutor> action)
         {
             this.Execute(action, DefaultRetryPolicy);
         }
 
         /// <summary>
-        /// Start a session, then execute the Executor lambda against QLDB within a transaction where no result is expected,
-        /// and end the session.
+        /// Start a session, then execute the Executor lambda against QLDB within a transaction where no result is
+        /// expected, and end the session.
         /// </summary>
         ///
-        /// <param name="action">The Executor lambda with no return value representing the block of code to be executed within the transaction.
-        /// This cannot have any side effects as it may be invoked multiple times.</param>
+        /// <param name="action">The Executor lambda with no return value representing the block of code to be executed
+        /// within the transaction. This cannot have any side effects as it may be invoked multiple times.</param>
         /// <param name="retryAction">A lambda that is invoked when the Executor lambda is about to be retried due to
         /// a retriable error. Can be null if not applicable.</param>
         ///
-        /// <exception cref="TransactionAbortedException">Thrown if the Executor lambda calls <see cref="TransactionExecutor.Abort"/>.</exception>
-        /// <exception cref="QldbDriverException">Thrown when called on a disposed instance.</exception>
-        /// <exception cref="AmazonServiceException">Thrown when there is an error executing against QLDB.</exception>
+        /// <exception cref="TransactionAbortedException">
+        /// Thrown if the Executor lambda calls <see cref="TransactionExecutor.Abort"/>.
+        /// </exception>
+        /// <exception cref="QldbDriverException">
+        /// Thrown when called on a disposed instance.
+        /// </exception>
+        /// <exception cref="AmazonServiceException">
+        /// Thrown when there is an error executing against QLDB.
+        /// </exception>
         [Obsolete("As of release 1.0, replaced by 'retryPolicy'. Will be removed in the next major release.")]
         public void Execute(Action<TransactionExecutor> action, Action<int> retryAction)
         {
@@ -93,18 +126,24 @@ namespace Amazon.QLDB.Driver
         }
 
         /// <summary>
-        /// Start a session, then execute the Executor lambda against QLDB within a transaction where no result is expected,
-        /// and end the session.
+        /// Start a session, then execute the Executor lambda against QLDB within a transaction where no result is
+        /// expected, and end the session.
         /// </summary>
         ///
-        /// <param name="action">The Executor lambda with no return value representing the block of code to be executed within the transaction.
-        /// This cannot have any side effects as it may be invoked multiple times.</param>
-        /// <param name="retryPolicy">A <see cref="RetryPolicy"/> that overrides the RetryPolicy set when creating the driver. The given retry policy
-        /// will be used when retrying the transaction.</param>
+        /// <param name="action">The Executor lambda with no return value representing the block of code to be executed
+        /// within the transaction. This cannot have any side effects as it may be invoked multiple times.</param>
+        /// <param name="retryPolicy">A <see cref="RetryPolicy"/> that overrides the RetryPolicy set when creating the
+        /// driver. The given retry policy will be used when retrying the transaction.</param>
         ///
-        /// <exception cref="TransactionAbortedException">Thrown if the Executor lambda calls <see cref="TransactionExecutor.Abort"/>.</exception>
-        /// <exception cref="QldbDriverException">Thrown when called on a disposed instance.</exception>
-        /// <exception cref="AmazonServiceException">Thrown when there is an error executing against QLDB.</exception>
+        /// <exception cref="TransactionAbortedException">
+        /// Thrown if the Executor lambda calls <see cref="TransactionExecutor.Abort"/>.
+        /// </exception>
+        /// <exception cref="QldbDriverException">
+        /// Thrown when called on a disposed instance.
+        /// </exception>
+        /// <exception cref="AmazonServiceException">
+        /// Thrown when there is an error executing against QLDB.
+        /// </exception>
         public void Execute(Action<TransactionExecutor> action, RetryPolicy retryPolicy)
         {
             this.Execute(
@@ -126,15 +165,21 @@ namespace Amazon.QLDB.Driver
         /// transaction is committed.</param>
         /// <typeparam name="T">The return type.</typeparam>
         ///
-        /// <returns>The return value of executing the executor. Note that if you directly return a <see cref="IResult"/>, this will
-        /// be automatically buffered in memory before the implicit commit to allow reading, as the commit will close
-        /// any open results. Any other <see cref="IResult"/> instances created within the executor block will be
-        /// invalidated, including if the return value is an object which nests said <see cref="IResult"/> instances within it.
-        /// </returns>
+        /// <returns>The return value of executing the executor. Note that if you directly return a
+        /// <see cref="IResult"/>, this will be automatically buffered in memory before the implicit commit to allow
+        /// reading, as the commit will close any open results. Any other <see cref="IResult"/> instances created within
+        /// the executor block will be invalidated, including if the return value is an object which nests said
+        /// <see cref="IResult"/> instances within it.</returns>
         ///
-        /// <exception cref="TransactionAbortedException">Thrown if the Executor lambda calls <see cref="TransactionExecutor.Abort"/>.</exception>
-        /// <exception cref="QldbDriverException">Thrown when called on a disposed instance.</exception>
-        /// <exception cref="AmazonServiceException">Thrown when there is an error executing against QLDB.</exception>
+        /// <exception cref="TransactionAbortedException">
+        /// Thrown if the Executor lambda calls <see cref="TransactionExecutor.Abort"/>.
+        /// </exception>
+        /// <exception cref="QldbDriverException">
+        /// Thrown when called on a disposed instance.
+        /// </exception>
+        /// <exception cref="AmazonServiceException">
+        /// Thrown when there is an error executing against QLDB.
+        /// </exception>
         public T Execute<T>(Func<TransactionExecutor, T> func)
         {
             return this.Execute(func, DefaultRetryPolicy);
@@ -145,22 +190,29 @@ namespace Amazon.QLDB.Driver
         /// and end the session.
         /// </summary>
         ///
-        /// <param name="func">The Executor lambda representing the block of code to be executed within the transaction. This cannot have any
-        /// side effects as it may be invoked multiple times, and the result cannot be trusted until the
-        /// transaction is committed.</param>
+        /// <param name="func">The Executor lambda representing the block of code to be executed within the transaction.
+        /// This cannot have any side effects as it may be invoked multiple times, and the result cannot be trusted
+        /// until the transaction is committed.</param>
         /// <param name="retryAction">A lambda that is invoked when the Executor lambda is about to be retried due to
         /// a retriable error. Can be null if not applicable.</param>
         /// <typeparam name="T">The return type.</typeparam>
         ///
-        /// <returns>The return value of executing the executor. Note that if you directly return a <see cref="IResult"/>, this will
-        /// be automatically buffered in memory before the implicit commit to allow reading, as the commit will close
-        /// any open results. Any other <see cref="IResult"/> instances created within the executor block will be
-        /// invalidated, including if the return value is an object which nests said <see cref="IResult"/> instances within it.
+        /// <returns>The return value of executing the executor. Note that if you directly return a
+        /// <see cref="IResult"/>, this will be automatically buffered in memory before the implicit commit to allow
+        /// reading, as the commit will close any open results. Any other <see cref="IResult"/> instances created within
+        /// the executor block will be invalidated, including if the return value is an object which nests said
+        /// <see cref="IResult"/> instances within it.
         /// </returns>
         ///
-        /// <exception cref="TransactionAbortedException">Thrown if the Executor lambda calls <see cref="TransactionExecutor.Abort"/>.</exception>
-        /// <exception cref="QldbDriverException">Thrown when called on a disposed instance.</exception>
-        /// <exception cref="AmazonServiceException">Thrown when there is an error executing against QLDB.</exception>
+        /// <exception cref="TransactionAbortedException">
+        /// Thrown if the Executor lambda calls <see cref="TransactionExecutor.Abort"/>.
+        /// </exception>
+        /// <exception cref="QldbDriverException">
+        /// Thrown when called on a disposed instance.
+        /// </exception>
+        /// <exception cref="AmazonServiceException">
+        /// Thrown when there is an error executing against QLDB.
+        /// </exception>
         [Obsolete("As of release 1.0, replaced by 'retryPolicy'. Will be removed in the next major release.")]
         public T Execute<T>(Func<TransactionExecutor, T> func, Action<int> retryAction)
         {
@@ -172,22 +224,29 @@ namespace Amazon.QLDB.Driver
         /// and end the session.
         /// </summary>
         ///
-        /// <param name="func">The Executor lambda representing the block of code to be executed within the transaction. This cannot have any
-        /// side effects as it may be invoked multiple times, and the result cannot be trusted until the
-        /// transaction is committed.</param>
-        /// <param name="retryPolicy">A <see cref="RetryPolicy"/> that overrides the RetryPolicy set when creating the driver. The given retry policy
-        /// will be used when retrying the transaction.</param>
+        /// <param name="func">The Executor lambda representing the block of code to be executed within the transaction.
+        /// This cannot have any side effects as it may be invoked multiple times, and the result cannot be trusted
+        /// until the transaction is committed.</param>
+        /// <param name="retryPolicy">A <see cref="RetryPolicy"/> that overrides the RetryPolicy set when creating the
+        /// driver. The given retry policy will be used when retrying the transaction.</param>
         /// <typeparam name="T">The return type.</typeparam>
         ///
-        /// <returns>The return value of executing the executor. Note that if you directly return a <see cref="IResult"/>, this will
-        /// be automatically buffered in memory before the implicit commit to allow reading, as the commit will close
-        /// any open results. Any other <see cref="IResult"/> instances created within the executor block will be
-        /// invalidated, including if the return value is an object which nests said <see cref="IResult"/> instances within it.
+        /// <returns>The return value of executing the executor. Note that if you directly return a
+        /// <see cref="IResult"/>, this will be automatically buffered in memory before the implicit commit to allow
+        /// reading, as the commit will close any open results. Any other <see cref="IResult"/> instances created within
+        /// the executor block will be invalidated, including if the return value is an object which nests said
+        /// <see cref="IResult"/> instances within it.
         /// </returns>
         ///
-        /// <exception cref="TransactionAbortedException">Thrown if the Executor lambda calls <see cref="TransactionExecutor.Abort"/>.</exception>
-        /// <exception cref="QldbDriverException">Thrown when called on a disposed instance.</exception>
-        /// <exception cref="AmazonServiceException">Thrown when there is an error executing against QLDB.</exception>
+        /// <exception cref="TransactionAbortedException">
+        /// Thrown if the Executor lambda calls <see cref="TransactionExecutor.Abort"/>.
+        /// </exception>
+        /// <exception cref="QldbDriverException">
+        /// Thrown when called on a disposed instance.
+        /// </exception>
+        /// <exception cref="AmazonServiceException">
+        /// Thrown when there is an error executing against QLDB.
+        /// </exception>
         public T Execute<T>(Func<TransactionExecutor, T> func, RetryPolicy retryPolicy)
         {
             return this.Execute(func, retryPolicy, null);
@@ -211,12 +270,163 @@ namespace Amazon.QLDB.Driver
         /// </summary>
         public void Dispose()
         {
+            this.isClosed = true;
+            while (this.sessionPool.Count > 0)
+            {
+                this.sessionPool.Take().Close();
+            }
+
             this.sessionPool.Dispose();
         }
 
-        internal T Execute<T>(Func<TransactionExecutor, T> func, RetryPolicy retryPolicy, Action<int> retryAction)
+        private T Execute<T>(Func<TransactionExecutor, T> func, RetryPolicy retryPolicy, Action<int> retryAction)
         {
-            return this.sessionPool.Execute(func, retryPolicy, retryAction);
+            if (this.isClosed)
+            {
+                this.logger.LogError(ExceptionMessages.DriverClosed);
+                throw new QldbDriverException(ExceptionMessages.DriverClosed);
+            }
+
+            bool replaceDeadSession = false;
+            int retryAttempt = 0;
+            while (true)
+            {
+                QldbSession session = null;
+                try
+                {
+                    if (replaceDeadSession)
+                    {
+                        session = this.StartNewSession();
+                    }
+                    else
+                    {
+                        session = this.GetSession();
+                    }
+
+                    T returnedValue = session.Execute(func);
+                    this.ReleaseSession(session);
+                    return returnedValue;
+                }
+                catch (RetriableException re)
+                {
+                    // If initial session is invalid, always retry once with a new session.
+                    if (re.InnerException is InvalidSessionException && retryAttempt == 0)
+                    {
+                        this.logger.LogDebug("Initial session received from pool invalid. Retrying...");
+                        replaceDeadSession = true;
+                        retryAttempt++;
+                        continue;
+                    }
+
+                    // Normal retry logic.
+                    if (retryAttempt++ >= retryPolicy.MaxRetries)
+                    {
+                        if (re.IsSessionAlive)
+                        {
+                            this.ReleaseSession(session);
+                        }
+                        else
+                        {
+                            this.poolPermits.Release();
+                        }
+
+                        throw re.InnerException;
+                    }
+
+                    this.logger.LogInformation("A recoverable error has occurred. Attempting retry #{}.", retryAttempt);
+                    this.logger.LogDebug(
+                        "Errored Transaction ID: {}. Error cause: {}",
+                        re.TransactionId,
+                        re.InnerException.ToString());
+                    if (re.IsSessionAlive)
+                    {
+                        this.logger.LogDebug("Retrying with a different session...");
+                        replaceDeadSession = false;
+                        this.ReleaseSession(session);
+                    }
+                    else
+                    {
+                        this.logger.LogDebug("Replacing expired session...");
+                        replaceDeadSession = true;
+                    }
+
+                    try
+                    {
+                        retryAction?.Invoke(retryAttempt);
+                        Thread.Sleep(retryPolicy.BackoffStrategy.CalculateDelay(
+                            new RetryPolicyContext(retryAttempt, re.InnerException)));
+                    }
+                    catch (Exception e)
+                    {
+                        // Safeguard against semaphore leak if parameter actions throw exceptions.
+                        if (replaceDeadSession)
+                        {
+                            this.poolPermits.Release();
+                        }
+
+                        throw e;
+                    }
+                }
+                catch (QldbTransactionException qte)
+                {
+                    if (qte.IsSessionAlive)
+                    {
+                        this.ReleaseSession(session);
+                    }
+                    else
+                    {
+                        this.poolPermits.Release();
+                    }
+
+                    throw qte.InnerException;
+                }
+            }
+        }
+
+        private QldbSession GetSession()
+        {
+            this.logger.LogDebug(
+                "Getting session. There are {} free sessions and {} available permits.",
+                this.sessionPool.Count,
+                this.sessionPool.BoundedCapacity - this.poolPermits.CurrentCount);
+
+            if (this.poolPermits.Wait(DefaultTimeoutInMs))
+            {
+                var session = this.sessionPool.Count > 0 ? this.sessionPool.Take() : null;
+
+                if (session == null)
+                {
+                    session = this.StartNewSession();
+                    this.logger.LogDebug("Creating new pooled session with ID {}.", session.GetSessionId());
+                }
+
+                return session;
+            }
+            else
+            {
+                this.logger.LogError(ExceptionMessages.SessionPoolEmpty);
+                throw new QldbDriverException(ExceptionMessages.SessionPoolEmpty);
+            }
+        }
+
+        private QldbSession StartNewSession()
+        {
+            try
+            {
+                Session session = Session.StartSession(this.ledgerName, this.sessionClient, this.logger);
+                return new QldbSession(session, this.logger);
+            }
+            catch (Exception e)
+            {
+                throw new RetriableException("None", false, e);
+            }
+        }
+
+        private void ReleaseSession(QldbSession session)
+        {
+            this.sessionPool.Add(session);
+            this.logger.LogDebug("Session returned to pool; pool size is now {}.", this.sessionPool.Count);
+            this.poolPermits.Release();
         }
     }
 }

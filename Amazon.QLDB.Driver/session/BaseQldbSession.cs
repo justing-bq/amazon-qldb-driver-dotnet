@@ -22,18 +22,11 @@ namespace Amazon.QLDB.Driver
     {
         private protected readonly ILogger logger;
         private protected Session session;
-        private protected bool isAlive;
 
         internal BaseQldbSession(Session session, ILogger logger)
         {
             this.session = session;
             this.logger = logger;
-            this.isAlive = true;
-        }
-
-        internal bool IsAlive()
-        {
-            return this.isAlive;
         }
 
         /// <summary>
@@ -43,11 +36,6 @@ namespace Amazon.QLDB.Driver
         {
             this.session.End();
         }
-
-        /// <summary>
-        /// Abstract method for releasing the session which can still be used by another transaction.
-        /// </summary>
-        internal abstract void Release();
 
         /// <summary>
         /// Retrieve the ID of this session..

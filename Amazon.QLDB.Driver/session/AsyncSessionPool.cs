@@ -160,7 +160,7 @@ namespace Amazon.QLDB.Driver
 
         private void ReleaseSession(AsyncQldbSession session)
         {
-            if (session != null && session.IsAlive())
+            if (session != null && session.isAlive)
             {
                 this.sessionPool.Add(session);
             }

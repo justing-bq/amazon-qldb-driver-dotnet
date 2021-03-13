@@ -33,6 +33,7 @@ namespace Amazon.QLDB.Driver
     internal class AsyncQldbSession : BaseQldbSession
     {
         private readonly Action<AsyncQldbSession> releaseSession;
+        internal bool isAlive = true;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="AsyncQldbSession"/> class.
@@ -50,7 +51,7 @@ namespace Amazon.QLDB.Driver
         /// <summary>
         /// Release the session which still can be used by another transaction.
         /// </summary>
-        internal override void Release()
+        internal void Release()
         {
             this.releaseSession(this);
         }
