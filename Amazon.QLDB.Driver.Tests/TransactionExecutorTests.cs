@@ -20,7 +20,7 @@
 #pragma warning restore IDE0060 // Remove unused parameter
         {
             mockResult = new Mock<IResult>();
-            mockTransaction = new Mock<Transaction>();
+            mockTransaction = new Mock<Transaction>(It.IsAny<Session>(), It.IsAny<string>(), null);
             mockTransaction.Setup(transaction => transaction.Execute(It.IsAny<string>())).Returns(mockResult.Object);
             mockTransaction.Setup(transaction => transaction.Execute(It.IsAny<string>(), It.IsAny<List<IIonValue>>()))
                 .Returns(mockResult.Object);
