@@ -28,7 +28,7 @@
 
         private protected override QldbDriverBuilder BuilderInstance => this;
 
-        private protected override string UserAgentStringPrefix => " QLDBDriver for .NET v";
+        private protected override string UserAgentStringPrefix => " QLDB Driver for .NET v";
 
         /// <summary>
         /// Build a driver instance using the current configuration set with the builder.

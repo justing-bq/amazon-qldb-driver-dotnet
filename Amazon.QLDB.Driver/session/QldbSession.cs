@@ -129,6 +129,7 @@ namespace Amazon.QLDB.Driver
         /// </summary>
         ///
         /// <param name="transaction">The transaction to abort.</param>
+        ///
         /// <returns>Whether the abort call has succeeded.</returns>
         private bool TryAbort(Transaction transaction)
         {

@@ -14,27 +14,47 @@
 namespace Amazon.QLDB.Driver
 {
     using System;
+    using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Linq;
     using System.Threading;
     using System.Threading.Tasks;
+    using Amazon.QLDBSession;
+    using Amazon.QLDBSession.Model;
+    using Microsoft.Extensions.Logging;
 
     /// <summary>
     /// <para>Represents a factory for accessing a specific ledger within QLDB. This class or
     /// <see cref="QldbDriver"/> should be the main entry points to any interaction with QLDB.</para>
     ///
-    /// <para>This factory pools sessions and attempts to return unused but available sessions when getting new sessions.
+    /// <para>
+    /// This factory pools sessions and attempts to return unused but available sessions when getting new sessions.
     /// The pool does not remove stale sessions until a new session is retrieved. The default pool size is the maximum
     /// amount of connections the session client allows set in the <see cref="ClientConfig"/>. <see cref="Dispose"/>
-    /// should be called when this factory is no longer needed in order to clean up resources, ending all sessions in the pool.</para>
+    /// should be called when this factory is no longer needed in order to clean up resources, ending all sessions in
+    /// the pool.
+    /// </para>
     /// </summary>
     public class AsyncQldbDriver : BaseQldbDriver, IAsyncQldbDriver
     {
-        private readonly AsyncSessionPool sessionPool;
+        private readonly BlockingCollection<AsyncQldbSession> sessionPool;
 
-        internal AsyncQldbDriver(AsyncSessionPool sessionPool)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AsyncQldbDriver"/> class.
+        /// </summary>
+        ///
+        /// <param name="ledgerName">The ledger to create sessions to.</param>
+        /// <param name="sessionClient">AWS SDK session client for QLDB.</param>
+        /// <param name="maxConcurrentTransactions">The maximum number of concurrent transactions.</param>
+        /// <param name="logger">The logger to use.</param>
+        internal AsyncQldbDriver(
+            string ledgerName,
+            AmazonQLDBSessionClient sessionClient,
+            int maxConcurrentTransactions,
+            ILogger logger)
+            : base(ledgerName, sessionClient, maxConcurrentTransactions, logger)
         {
-            this.sessionPool = sessionPool;
+            this.sessionPool = new BlockingCollection<AsyncQldbSession>(maxConcurrentTransactions);
         }
 
         /// <summary>
@@ -52,7 +72,16 @@ namespace Amazon.QLDB.Driver
         /// </summary>
         public void Dispose()
         {
-            this.sessionPool.Dispose();
+            if (!this.isClosed)
+            {
+                this.isClosed = true;
+                while (this.sessionPool.Count > 0)
+                {
+                    this.sessionPool.Take().Close();
+                }
+
+                this.sessionPool.Dispose();
+            }
         }
 
         /// <inheritdoc/>
@@ -60,7 +89,7 @@ namespace Amazon.QLDB.Driver
             Func<AsyncTransactionExecutor, Task> action,
             CancellationToken cancellationToken = default)
         {
-            await this.Execute(action, BaseQldbDriver.DefaultRetryPolicy, cancellationToken);
+            await this.Execute(action, DefaultRetryPolicy, cancellationToken);
         }
 
         /// <inheritdoc/>
@@ -83,7 +112,7 @@ namespace Amazon.QLDB.Driver
         public async Task<T> Execute<T>(
             Func<AsyncTransactionExecutor, Task<T>> func, CancellationToken cancellationToken = default)
         {
-            return await this.Execute<T>(func, BaseQldbDriver.DefaultRetryPolicy, cancellationToken);
+            return await this.Execute<T>(func, DefaultRetryPolicy, cancellationToken);
         }
 
         /// <inheritdoc/>
@@ -92,7 +121,106 @@ namespace Amazon.QLDB.Driver
             RetryPolicy retryPolicy,
             CancellationToken cancellationToken = default)
         {
-            return await this.sessionPool.Execute<T>(func, retryPolicy, cancellationToken);
+            if (this.isClosed)
+            {
+                this.logger.LogError(ExceptionMessages.DriverClosed);
+                throw new QldbDriverException(ExceptionMessages.DriverClosed);
+            }
+
+            bool replaceDeadSession = false;
+            int retryAttempt = 0;
+            while (true)
+            {
+                AsyncQldbSession session = null;
+                try
+                {
+                    if (replaceDeadSession)
+                    {
+                        session = await this.StartNewSession();
+                    }
+                    else
+                    {
+                        session = await this.GetSession();
+                    }
+
+                    T returnedValue = await session.Execute(func);
+                    this.ReleaseSession(session);
+                    return returnedValue;
+                }
+                catch (RetriableException re)
+                {
+                    // If initial session is invalid, always retry once with a new session.
+                    if (re.InnerException is InvalidSessionException && retryAttempt == 0)
+                    {
+                        this.logger.LogDebug("Initial session received from pool invalid. Retrying...");
+                        replaceDeadSession = true;
+                        retryAttempt++;
+                        continue;
+                    }
+
+                    // Normal retry logic.
+                    if (retryAttempt++ >= retryPolicy.MaxRetries)
+                    {
+                        if (re.IsSessionAlive)
+                        {
+                            this.ReleaseSession(session);
+                        }
+                        else
+                        {
+                            this.poolPermits.Release();
+                        }
+
+                        throw re.InnerException;
+                    }
+
+                    this.logger.LogInformation("A recoverable error has occurred. Attempting retry #{}.", retryAttempt);
+                    this.logger.LogDebug(
+                        "Errored Transaction ID: {}. Error cause: {}",
+                        re.TransactionId,
+                        re.InnerException.ToString());
+                    if (re.IsSessionAlive)
+                    {
+                        this.logger.LogDebug("Retrying with a different session...");
+                        replaceDeadSession = false;
+                        this.ReleaseSession(session);
+                    }
+                    else
+                    {
+                        this.logger.LogDebug("Replacing expired session...");
+                        replaceDeadSession = true;
+                    }
+
+                    try
+                    {
+                        var backoffDelay = retryPolicy.BackoffStrategy.CalculateDelay(
+                            new RetryPolicyContext(retryAttempt, re.InnerException));
+                        await Task.Delay(backoffDelay, cancellationToken);
+                    }
+                    catch (Exception e)
+                    {
+                        // Safeguard against semaphore leak if parameter actions throw exceptions.
+                        if (replaceDeadSession)
+                        {
+                            this.poolPermits.Release();
+                        }
+
+                        throw e;
+                    }
+                }
+                catch (QldbTransactionException qte)
+                {
+                    if (qte.IsSessionAlive)
+                    {
+                        this.ReleaseSession(session);
+                    }
+                    else
+                    {
+                        this.poolPermits.Release();
+                    }
+
+                    throw qte.InnerException;
+                }
+            }
         }
 
         /// <inheritdoc/>
@@ -102,6 +230,52 @@ namespace Amazon.QLDB.Driver
                 async txn => await txn.Execute(TableNameQuery), cancellationToken);
 
             return (await result.ToListAsync(cancellationToken)).Select(i => i.StringValue);
+        }
+
+        private async Task<AsyncQldbSession> GetSession()
+        {
+            this.logger.LogDebug(
+                "Getting session. There are {} free sessions and {} available permits.",
+                this.sessionPool.Count,
+                this.sessionPool.BoundedCapacity - this.poolPermits.CurrentCount);
+
+            if (await this.poolPermits.WaitAsync(DefaultTimeoutInMs))
+            {
+                var session = this.sessionPool.Count > 0 ? this.sessionPool.Take() : null;
+
+                if (session == null)
+                {
+                    session = await this.StartNewSession();
+                    this.logger.LogDebug("Creating new pooled session with ID {}.", session.GetSessionId());
+                }
+
+                return session;
+            }
+            else
+            {
+                this.logger.LogError(ExceptionMessages.SessionPoolEmpty);
+                throw new QldbDriverException(ExceptionMessages.SessionPoolEmpty);
+            }
+        }
+
+        private async Task<AsyncQldbSession> StartNewSession()
+        {
+            try
+            {
+                Session session = await Session.StartSessionAsync(this.ledgerName, this.sessionClient, this.logger);
+                return new AsyncQldbSession(session, this.logger);
+            }
+            catch (Exception e)
+            {
+                throw new RetriableException("None", false, e);
+            }
+        }
+
+        private void ReleaseSession(AsyncQldbSession session)
+        {
+            this.sessionPool.Add(session);
+            this.logger.LogDebug("Session returned to pool; pool size is now {}.", this.sessionPool.Count);
+            this.poolPermits.Release();
         }
     }
 }

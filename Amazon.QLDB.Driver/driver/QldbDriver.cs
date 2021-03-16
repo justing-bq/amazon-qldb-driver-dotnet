@@ -37,28 +37,23 @@ namespace Amazon.QLDB.Driver
     /// </summary>
     public class QldbDriver : BaseQldbDriver, IQldbDriver
     {
-        private readonly string ledgerName;
-        private readonly AmazonQLDBSessionClient sessionClient;
-        private readonly ILogger logger;
-        private readonly SemaphoreSlim poolPermits;
         private readonly BlockingCollection<QldbSession> sessionPool;
-        private bool isClosed = false;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="QldbDriver"/> class.
         /// </summary>
         ///
-        /// <param name="sessionPool">The ledger to create sessions to.</param>
+        /// <param name="ledgerName">The ledger to create sessions to.</param>
+        /// <param name="sessionClient">AWS SDK session client for QLDB.</param>
+        /// <param name="maxConcurrentTransactions">The maximum number of concurrent transactions.</param>
+        /// <param name="logger">The logger to use.</param>
         internal QldbDriver(
             string ledgerName,
             AmazonQLDBSessionClient sessionClient,
             int maxConcurrentTransactions,
             ILogger logger)
+            : base(ledgerName, sessionClient, maxConcurrentTransactions, logger)
         {
-            this.ledgerName = ledgerName;
-            this.sessionClient = sessionClient;
-            this.logger = logger;
-            this.poolPermits = new SemaphoreSlim(maxConcurrentTransactions, maxConcurrentTransactions);
             this.sessionPool = new BlockingCollection<QldbSession>(maxConcurrentTransactions);
         }
 
@@ -270,13 +265,16 @@ namespace Amazon.QLDB.Driver
         /// </summary>
         public void Dispose()
         {
-            this.isClosed = true;
-            while (this.sessionPool.Count > 0)
+            if (!this.isClosed)
             {
-                this.sessionPool.Take().Close();
-            }
+                this.isClosed = true;
+                while (this.sessionPool.Count > 0)
+                {
+                    this.sessionPool.Take().Close();
+                }
 
-            this.sessionPool.Dispose();
+                this.sessionPool.Dispose();
+            }
         }
 
         private T Execute<T>(Func<TransactionExecutor, T> func, RetryPolicy retryPolicy, Action<int> retryAction)

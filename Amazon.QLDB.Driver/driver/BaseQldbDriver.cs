@@ -13,6 +13,10 @@
 
 namespace Amazon.QLDB.Driver
 {
+    using System.Threading;
+    using Amazon.QLDBSession;
+    using Microsoft.Extensions.Logging;
+
     public abstract class BaseQldbDriver
     {
         internal const string TableNameQuery =
@@ -20,5 +24,23 @@ namespace Amazon.QLDB.Driver
 
         private protected const int DefaultTimeoutInMs = 1;
         private protected static readonly RetryPolicy DefaultRetryPolicy = RetryPolicy.Builder().Build();
+
+        private protected readonly string ledgerName;
+        private protected readonly AmazonQLDBSessionClient sessionClient;
+        private protected readonly ILogger logger;
+        private protected readonly SemaphoreSlim poolPermits;
+        private protected bool isClosed = false;
+
+        internal BaseQldbDriver(
+            string ledgerName,
+            AmazonQLDBSessionClient sessionClient,
+            int maxConcurrentTransactions,
+            ILogger logger)
+        {
+            this.ledgerName = ledgerName;
+            this.sessionClient = sessionClient;
+            this.logger = logger;
+            this.poolPermits = new SemaphoreSlim(maxConcurrentTransactions, maxConcurrentTransactions);
+        }
     }
 }
