@@ -24,11 +24,11 @@ namespace Amazon.QLDB.Driver.Tests
 
     internal class MockSessionClient : IAmazonQLDBSession
     {
-        private readonly Queue<SendCommandResponse> responses;
+        private readonly Queue<Output> responses;
 
         internal MockSessionClient()
         {
-            this.responses = new Queue<SendCommandResponse>();
+            this.responses = new Queue<Output>();
         }
 
         // Not used
@@ -49,17 +49,48 @@ namespace Amazon.QLDB.Driver.Tests
         public Task<SendCommandResponse> SendCommandAsync(SendCommandRequest request,
             CancellationToken cancellationToken = default)
         {
-            return Task.FromResult(responses.Dequeue());
+            var output = responses.Dequeue();
+            if (output.exception != null)
+            {
+                throw output.exception;
+            }
+            else
+            {
+                return Task.FromResult(output.response);
+            }
         }
 
         internal void QueueResponse(SendCommandResponse response)
         {
-            this.responses.Enqueue(response);
+            var output = new Output
+            {
+                exception = null,
+                response = response
+            };
+
+            this.responses.Enqueue(output);
+        }
+
+        internal void QueueResponse(Exception e)
+        {
+            var output = new Output
+            {
+                exception = e,
+                response = null
+            };
+
+            this.responses.Enqueue(output);
         }
 
         internal void Clear()
         {
             this.responses.Clear();
+        }
+
+        private struct Output
+        {
+            internal Exception exception;
+            internal SendCommandResponse response;
         }
     }
 }
