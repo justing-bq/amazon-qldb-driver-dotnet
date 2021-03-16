@@ -82,7 +82,7 @@ namespace Amazon.QLDB.Driver.Tests
                 .Throws(new AmazonServiceException(It.IsAny<string>()));
 
             Assert.ThrowsException<AmazonServiceException>(transaction.Commit);
-            mockSession.Verify(s => s.AbortTransaction(), Times.Exactly(1));
+            mockSession.Verify(s => s.AbortTransaction(), Times.Exactly(0));
         }
 
         [TestMethod]
