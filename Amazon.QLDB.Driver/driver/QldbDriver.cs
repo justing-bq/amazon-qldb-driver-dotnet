@@ -49,7 +49,7 @@ namespace Amazon.QLDB.Driver
         /// <param name="logger">The logger to use.</param>
         internal QldbDriver(
             string ledgerName,
-            AmazonQLDBSessionClient sessionClient,
+            IAmazonQLDBSession sessionClient,
             int maxConcurrentTransactions,
             ILogger logger)
             : base(ledgerName, sessionClient, maxConcurrentTransactions, logger)
@@ -274,6 +274,8 @@ namespace Amazon.QLDB.Driver
                 }
 
                 this.sessionPool.Dispose();
+                this.sessionClient.Dispose();
+                this.poolPermits.Dispose();
             }
         }
 

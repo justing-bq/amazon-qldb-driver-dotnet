@@ -33,7 +33,7 @@ namespace Amazon.QLDB.Driver
 
         internal BaseQldbDriver(
             string ledgerName,
-            AmazonQLDBSessionClient sessionClient,
+            IAmazonQLDBSession sessionClient,
             int maxConcurrentTransactions,
             ILogger logger)
         {
