@@ -312,7 +312,6 @@ namespace Amazon.QLDB.Driver.Tests
             mockSession.Setup(x => x.StartTransaction()).Returns(sendCommandResponseWithStartSession.StartTransaction);
             mockSession.SetupSequence(x => x.ExecuteStatement(It.IsAny<String>(), It.IsAny<String>(), It.IsAny<List<IIonValue>>()))
                 .Throws(exception)
-                .Throws(exception)
                 .Returns(sendCommandResponseExecute.ExecuteStatement);
             mockSession.Setup(x => x.CommitTransaction(It.IsAny<String>(), It.IsAny<MemoryStream>()))
                 .Returns(sendCommandResponseCommit.CommitTransaction);

@@ -44,7 +44,7 @@ namespace Amazon.QLDB.Driver
         /// <summary>
         /// Abort the transaction and roll back any changes.
         /// </summary>
-        internal void Abort()
+        internal virtual void Abort()
         {
             this.session.AbortTransaction();
         }
@@ -82,7 +82,7 @@ namespace Amazon.QLDB.Driver
         /// <returns>Result from executed statement.</returns>
         ///
         /// <exception cref="AmazonServiceException">Thrown when there is an error executing against QLDB.</exception>
-        internal IResult Execute(string statement)
+        internal virtual IResult Execute(string statement)
         {
             return this.Execute(statement, new List<IIonValue>());
         }
@@ -97,7 +97,7 @@ namespace Amazon.QLDB.Driver
         /// <returns>Result from executed statement.</returns>
         ///
         /// <exception cref="AmazonServiceException">Thrown when there is an error executing against QLDB.</exception>
-        internal IResult Execute(string statement, List<IIonValue> parameters)
+        internal virtual IResult Execute(string statement, List<IIonValue> parameters)
         {
             ValidationUtils.AssertStringNotEmpty(statement, "statement");
 
@@ -122,7 +122,7 @@ namespace Amazon.QLDB.Driver
         /// <returns>Result from executed statement.</returns>
         ///
         /// <exception cref="AmazonServiceException">Thrown when there is an error executing against QLDB.</exception>
-        internal IResult Execute(string statement, params IIonValue[] parameters)
+        internal virtual IResult Execute(string statement, params IIonValue[] parameters)
         {
             return this.Execute(statement, new List<IIonValue>(parameters));
         }
