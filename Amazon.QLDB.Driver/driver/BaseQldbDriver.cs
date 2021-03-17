@@ -26,7 +26,7 @@ namespace Amazon.QLDB.Driver
         private protected static readonly RetryPolicy DefaultRetryPolicy = RetryPolicy.Builder().Build();
 
         private protected readonly string ledgerName;
-        private protected readonly AmazonQLDBSessionClient sessionClient;
+        private protected readonly IAmazonQLDBSession sessionClient;
         private protected readonly ILogger logger;
         private protected readonly SemaphoreSlim poolPermits;
         private protected bool isClosed = false;
