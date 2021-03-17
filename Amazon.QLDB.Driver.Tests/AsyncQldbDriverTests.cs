@@ -18,7 +18,6 @@ namespace Amazon.QLDB.Driver.Tests
     using System.IO;
     using System.Linq;
     using System.Net;
-    using System.Threading;
     using System.Threading.Tasks;
     using Amazon.IonDotnet.Tree;
     using Amazon.IonDotnet.Tree.Impl;
@@ -34,7 +33,7 @@ namespace Amazon.QLDB.Driver.Tests
     {
         private const string TestTransactionId = "testTransactionId12345";
         private static AsyncQldbDriverBuilder builder;
-        private static Mock<AmazonQLDBSessionClient> mockClient;
+        private static MockSessionClient mockClient;
         private static readonly byte[] digest = { 89, 49, 253, 196, 209, 176, 42, 98, 35, 214, 6, 163, 93,
             141, 170, 92, 75, 218, 111, 151, 173, 49, 57, 144, 227, 72, 215, 194, 186, 93, 85, 108,
         };
@@ -42,7 +41,7 @@ namespace Amazon.QLDB.Driver.Tests
         [TestInitialize]
         public void SetupTest()
         {
-            mockClient = new Mock<AmazonQLDBSessionClient>();
+            mockClient = new MockSessionClient();
             var sendCommandResponse = new SendCommandResponse
             {
                 StartSession = new StartSessionResult
@@ -70,8 +69,8 @@ namespace Amazon.QLDB.Driver.Tests
                     RequestId = "testId"
                 }
             };
-            mockClient.Setup(x => x.SendCommandAsync(It.IsAny<SendCommandRequest>(), It.IsAny<CancellationToken>()))
-                    .Returns(Task.FromResult(sendCommandResponse));
+            mockClient.SetDefaultResponse(sendCommandResponse);
+
             builder = AsyncQldbDriver.Builder()
                 .WithLedger("testLedger")
                 .WithRetryLogging()
@@ -107,7 +106,7 @@ namespace Amazon.QLDB.Driver.Tests
         [TestMethod]
         public void TestAsyncQldbDriverConstructorReturnsValidObject()
         {
-            var driver = new AsyncQldbDriver("ledgerName", mockClient.Object, 4, NullLogger.Instance);
+            var driver = new AsyncQldbDriver("ledgerName", mockClient, 4, NullLogger.Instance);
         
             Assert.IsNotNull(driver);
         }
@@ -172,31 +171,32 @@ namespace Amazon.QLDB.Driver.Tests
                 }
             };
         
-            mockClient.SetupSequence(x => x.SendCommandAsync(It.IsAny<SendCommandRequest>(), It.IsAny<CancellationToken>()))
-                    .Returns(Task.FromResult(sendCommandResponseWithStartSession))
-                    .Returns(Task.FromResult(sendCommandResponseStartTransaction))
-                    .Returns(Task.FromResult(sendCommandResponseExecute))
-                    .Returns(Task.FromResult(sendCommandResponseCommit));
+            mockClient.QueueResponse(sendCommandResponseWithStartSession);
+            mockClient.QueueResponse(sendCommandResponseStartTransaction);
+            mockClient.QueueResponse(sendCommandResponseExecute);
+            mockClient.QueueResponse(sendCommandResponseCommit);
         
-            var driver = new AsyncQldbDriver("ledgerName", mockClient.Object, 4, NullLogger.Instance);
+            var driver = new AsyncQldbDriver("ledgerName", mockClient, 4, NullLogger.Instance);
 
             var result = await driver.ListTableNames();
         
             Assert.IsNotNull(result);
             CollectionAssert.AreEqual(tables, result.ToList());
+            
+            mockClient.Clear();
         }
         
         [TestMethod]
         public async Task TestAsyncExecuteWithActionLambdaCanInvokeSuccessfully()
         {
-            var driver = new AsyncQldbDriver("ledgerName", mockClient.Object, 4, NullLogger.Instance);
+            var driver = new AsyncQldbDriver("ledgerName", mockClient, 4, NullLogger.Instance);
             await driver.Execute(txn => txn.Execute("testStatement"));
         }
         
         [TestMethod]
         public async Task TestAsyncExecuteWithActionAndRetryPolicyCanInvokeSuccessfully()
         {
-            var driver = new AsyncQldbDriver("ledgerName", mockClient.Object, 4, NullLogger.Instance);
+            var driver = new AsyncQldbDriver("ledgerName", mockClient, 4, NullLogger.Instance);
 
             await driver.Execute(txn => txn.Execute("testStatement"),
                 Amazon.QLDB.Driver.RetryPolicy.Builder().Build());
@@ -205,7 +205,7 @@ namespace Amazon.QLDB.Driver.Tests
         [TestMethod]
         public async Task TestAsyncExecuteWithFuncLambdaReturnsFuncOutput()
         {
-            var driver = new AsyncQldbDriver("ledgerName", mockClient.Object, 4, NullLogger.Instance);
+            var driver = new AsyncQldbDriver("ledgerName", mockClient, 4, NullLogger.Instance);
         
             var result = await driver.Execute(txn =>
             {
@@ -218,7 +218,7 @@ namespace Amazon.QLDB.Driver.Tests
         [TestMethod]
         public async Task TestAsyncExecuteWithFuncLambdaAndRetryPolicyReturnsFuncOutput()
         {
-            var driver = new AsyncQldbDriver("ledgerName", mockClient.Object, 4, NullLogger.Instance);
+            var driver = new AsyncQldbDriver("ledgerName", mockClient, 4, NullLogger.Instance);
         
             driver.Dispose();
 
@@ -238,6 +238,18 @@ namespace Amazon.QLDB.Driver.Tests
             h1 = AsyncTransaction.Dot(h1, statement, new List<IIonValue>());
         
             var sendCommandResponseWithStartSession = new SendCommandResponse
+            {
+                StartSession = new StartSessionResult
+                {
+                    SessionToken = "testToken"
+                },
+                ResponseMetadata = new ResponseMetadata
+                {
+                    RequestId = "testId"
+                }
+            };
+            
+            var sendCommandResponseWithStartTransaction = new SendCommandResponse
             {
                 StartTransaction = new StartTransactionResult
                 {
@@ -276,19 +288,24 @@ namespace Amazon.QLDB.Driver.Tests
                     RequestId = "testId"
                 }
             };
-            var mockCreator = new Mock<Func<CancellationToken, Task<Session>>>();
-            var mockSession = new Mock<Session>(null, null, null, null, null);
+
+            // Prepare first execution attempt which fails with an exception.
+            mockClient.QueueResponse(sendCommandResponseWithStartSession);
+            mockClient.QueueResponse(sendCommandResponseWithStartTransaction);
+            mockClient.QueueResponse(exception);
+            
+            // Prepare second execution attempt which succeeds.
+            
+            // OccConflictException does not do another start session upon retry.
+            if (exception is not OccConflictException)
+            {
+                mockClient.QueueResponse(sendCommandResponseWithStartSession);
+            }
+            mockClient.QueueResponse(sendCommandResponseWithStartTransaction);
+            mockClient.QueueResponse(sendCommandResponseExecute);
+            mockClient.QueueResponse(sendCommandResponseCommit);
         
-            mockSession.Setup(x => x.StartTransactionAsync(default)).ReturnsAsync(sendCommandResponseWithStartSession.StartTransaction);
-            mockSession.SetupSequence(x => x.ExecuteStatementAsync(It.IsAny<String>(), It.IsAny<String>(), It.IsAny<List<IIonValue>>(), default))
-                .Throws(exception)
-                .ReturnsAsync(sendCommandResponseExecute.ExecuteStatement);
-            mockSession.Setup(x => x.CommitTransactionAsync(It.IsAny<String>(), It.IsAny<MemoryStream>(), default))
-                .ReturnsAsync(sendCommandResponseCommit.CommitTransaction);
-        
-            mockCreator.Setup(x => x(default)).ReturnsAsync(mockSession.Object);
-        
-            var driver = new AsyncQldbDriver("ledgerName", mockClient.Object, 4, NullLogger.Instance);
+            var driver = new AsyncQldbDriver("ledgerName", mockClient, 4, NullLogger.Instance);
         
             try
             {
@@ -302,6 +319,8 @@ namespace Amazon.QLDB.Driver.Tests
             }
         
             Assert.IsFalse(expectThrow);
+            
+            mockClient.Clear();
         }
 
         private static IEnumerable<object[]> CreateDriverExceptions()
