@@ -35,6 +35,7 @@ namespace Amazon.QLDB.Driver.Tests
         private const string TestTransactionId = "testTransactionId12345";
         private static QldbDriverBuilder builder;
         private static Mock<AmazonQLDBSessionClient> mockClient;
+        private static MockSessionClient mockSessionClient;
         private static readonly byte[] digest = new byte[] { 89, 49, 253, 196, 209, 176, 42, 98, 35, 214, 6, 163, 93,
             141, 170, 92, 75, 218, 111, 151, 173, 49, 57, 144, 227, 72, 215, 194, 186, 93, 85, 108,
         };
@@ -43,6 +44,7 @@ namespace Amazon.QLDB.Driver.Tests
         public void SetupTest()
         {
             mockClient = new Mock<AmazonQLDBSessionClient>();
+            mockSessionClient = new MockSessionClient();
             var sendCommandResponse = new SendCommandResponse
             {
                 StartSession = new StartSessionResult
@@ -269,6 +271,18 @@ namespace Amazon.QLDB.Driver.Tests
 
             var sendCommandResponseWithStartSession = new SendCommandResponse
             {
+                StartSession = new StartSessionResult
+                {
+                    SessionToken = "testToken"
+                },
+                ResponseMetadata = new ResponseMetadata
+                {
+                    RequestId = "testId"
+                }
+            };
+            
+            var sendCommandResponseWithStartTransaction = new SendCommandResponse
+            {
                 StartTransaction = new StartTransactionResult
                 {
                     TransactionId = TestTransactionId
@@ -306,19 +320,16 @@ namespace Amazon.QLDB.Driver.Tests
                     RequestId = "testId"
                 }
             };
-            var mockCreator = new Mock<Func<Session>>();
-            var mockSession = new Mock<Session>(null, null, null, null, null);
 
-            mockSession.Setup(x => x.StartTransaction()).Returns(sendCommandResponseWithStartSession.StartTransaction);
-            mockSession.SetupSequence(x => x.ExecuteStatement(It.IsAny<String>(), It.IsAny<String>(), It.IsAny<List<IIonValue>>()))
-                .Throws(exception)
-                .Returns(sendCommandResponseExecute.ExecuteStatement);
-            mockSession.Setup(x => x.CommitTransaction(It.IsAny<String>(), It.IsAny<MemoryStream>()))
-                .Returns(sendCommandResponseCommit.CommitTransaction);
+            mockSessionClient.QueueResponse(sendCommandResponseWithStartSession);
+            mockSessionClient.QueueResponse(sendCommandResponseWithStartTransaction);
+            mockSessionClient.QueueResponse(exception);
+            mockSessionClient.QueueResponse(sendCommandResponseWithStartSession);
+            mockSessionClient.QueueResponse(sendCommandResponseWithStartTransaction);
+            mockSessionClient.QueueResponse(sendCommandResponseExecute);
+            mockSessionClient.QueueResponse(sendCommandResponseCommit);
 
-            mockCreator.Setup(x => x()).Returns(mockSession.Object);
-
-            var driver = new QldbDriver("ledgerName", mockClient.Object, 4, NullLogger.Instance);
+            var driver = new QldbDriver("ledgerName", mockSessionClient, 4, NullLogger.Instance);
 
             try
             {
