@@ -25,6 +25,7 @@ namespace Amazon.QLDB.Driver.Tests
     internal class MockSessionClient : IAmazonQLDBSession
     {
         private readonly Queue<Output> responses;
+        private SendCommandResponse defaultResponse;
 
         internal MockSessionClient()
         {
@@ -36,8 +37,12 @@ namespace Amazon.QLDB.Driver.Tests
 
         public void Dispose()
         {
-            // Not used
-            throw new NotImplementedException();
+            // Do nothing
+        }
+
+        public void SetDefaultResponse(SendCommandResponse response)
+        {
+            this.defaultResponse = response;
         }
 
         public SendCommandResponse SendCommand(SendCommandRequest request)
@@ -49,6 +54,11 @@ namespace Amazon.QLDB.Driver.Tests
         public Task<SendCommandResponse> SendCommandAsync(SendCommandRequest request,
             CancellationToken cancellationToken = default)
         {
+            if (responses.Count == 0 && this.defaultResponse != null)
+            {
+                return Task.FromResult(this.defaultResponse);
+            }
+            
             var output = responses.Dequeue();
             if (output.exception != null)
             {
