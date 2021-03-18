@@ -307,17 +307,18 @@ namespace Amazon.QLDB.Driver
                 }
                 catch (RetriableException re)
                 {
+                    retryAttempt++;
+
                     // If initial session is invalid, always retry once with a new session.
-                    if (re.InnerException is InvalidSessionException && retryAttempt == 0)
+                    if (re.InnerException is InvalidSessionException && retryAttempt == 1)
                     {
                         this.logger.LogDebug("Initial session received from pool invalid. Retrying...");
                         replaceDeadSession = true;
-                        retryAttempt++;
                         continue;
                     }
 
                     // Normal retry logic.
-                    if (retryAttempt++ >= retryPolicy.MaxRetries)
+                    if (retryAttempt > retryPolicy.MaxRetries)
                     {
                         if (re.IsSessionAlive)
                         {
@@ -353,7 +354,7 @@ namespace Amazon.QLDB.Driver
                         Thread.Sleep(retryPolicy.BackoffStrategy.CalculateDelay(
                             new RetryPolicyContext(retryAttempt, re.InnerException)));
                     }
-                    catch (Exception e)
+                    catch (Exception)
                     {
                         // Safeguard against semaphore leak if parameter actions throw exceptions.
                         if (replaceDeadSession)
@@ -361,7 +362,7 @@ namespace Amazon.QLDB.Driver
                             this.poolPermits.Release();
                         }
 
-                        throw e;
+                        throw;
                     }
                 }
                 catch (QldbTransactionException qte)
@@ -389,14 +390,7 @@ namespace Amazon.QLDB.Driver
 
             if (this.poolPermits.Wait(DefaultTimeoutInMs))
             {
-                var session = this.sessionPool.Count > 0 ? this.sessionPool.Take() : null;
-
-                if (session == null)
-                {
-                    session = this.StartNewSession();
-                    this.logger.LogDebug("Creating new pooled session with ID {}.", session.GetSessionId());
-                }
-
+                var session = this.sessionPool.Count > 0 ? this.sessionPool.Take() : this.StartNewSession();
                 return session;
             }
             else
@@ -411,11 +405,12 @@ namespace Amazon.QLDB.Driver
             try
             {
                 Session session = Session.StartSession(this.ledgerName, this.sessionClient, this.logger);
+                this.logger.LogDebug("Creating new pooled session with ID {}.", session.SessionId);
                 return new QldbSession(session, this.logger);
             }
             catch (Exception e)
             {
-                throw new RetriableException("None", false, e);
+                throw new RetriableException(QldbTransactionException.DefaultTransactionId, false, e);
             }
         }
 

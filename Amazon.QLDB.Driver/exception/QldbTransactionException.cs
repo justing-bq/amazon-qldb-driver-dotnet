@@ -21,6 +21,8 @@ namespace Amazon.QLDB.Driver
     /// </summary>
     public class QldbTransactionException : Exception
     {
+        internal const string DefaultTransactionId = "None";
+
         /// <summary>
         /// Initializes a new instance of the <see cref="QldbTransactionException"/> class.
         /// </summary>

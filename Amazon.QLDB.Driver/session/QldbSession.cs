@@ -63,7 +63,7 @@ namespace Amazon.QLDB.Driver
             ValidationUtils.AssertNotNull(func, "func");
 
             Transaction transaction = null;
-            string transactionId = "None";
+            string transactionId = QldbTransactionException.DefaultTransactionId;
             try
             {
                 transaction = this.StartTransaction();
@@ -77,9 +77,9 @@ namespace Amazon.QLDB.Driver
                 transaction.Commit();
                 return returnedValue;
             }
-            catch (QldbTransactionException qte)
+            catch (QldbTransactionException)
             {
-                throw qte;
+                throw;
             }
             catch (InvalidSessionException ise)
             {
