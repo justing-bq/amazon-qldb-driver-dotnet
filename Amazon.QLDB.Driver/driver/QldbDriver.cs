@@ -66,6 +66,25 @@ namespace Amazon.QLDB.Driver
         {
             return new QldbDriverBuilder();
         }
+        
+        /// <summary>
+        /// Close this driver and end all sessions in the current pool. No-op if already closed.
+        /// </summary>
+        public void Dispose()
+        {
+            if (!this.isClosed)
+            {
+                this.isClosed = true;
+                while (this.sessionPool.Count > 0)
+                {
+                    this.sessionPool.Take().Close();
+                }
+
+                this.sessionPool.Dispose();
+                this.sessionClient.Dispose();
+                this.poolPermits.Dispose();
+            }
+        }
 
         /// <summary>
         /// Start a session, then execute the Executor lambda against QLDB within a transaction where no result is
@@ -247,39 +266,7 @@ namespace Amazon.QLDB.Driver
             return this.Execute(func, retryPolicy, null);
         }
 
-        /// <summary>
-        /// Retrieve the table names that are available within the ledger.
-        /// </summary>
-        ///
-        /// <returns>The Enumerable over the table names in the ledger.</returns>
-        public IEnumerable<string> ListTableNames()
-        {
-            return this.Execute((txn) =>
-            {
-                return txn.Execute(TableNameQuery);
-            }).Select(i => i.StringValue);
-        }
-
-        /// <summary>
-        /// Close this driver and end all sessions in the current pool. No-op if already closed.
-        /// </summary>
-        public void Dispose()
-        {
-            if (!this.isClosed)
-            {
-                this.isClosed = true;
-                while (this.sessionPool.Count > 0)
-                {
-                    this.sessionPool.Take().Close();
-                }
-
-                this.sessionPool.Dispose();
-                this.sessionClient.Dispose();
-                this.poolPermits.Dispose();
-            }
-        }
-
-        private T Execute<T>(Func<TransactionExecutor, T> func, RetryPolicy retryPolicy, Action<int> retryAction)
+        public T Execute<T>(Func<TransactionExecutor, T> func, RetryPolicy retryPolicy, Action<int> retryAction)
         {
             if (this.isClosed)
             {
@@ -309,6 +296,11 @@ namespace Amazon.QLDB.Driver
                 }
                 catch (RetriableException re)
                 {
+                    if (IsTransactionExpiry(re.InnerException))
+                    {
+                        throw re.InnerException;
+                    }
+
                     // If initial session is invalid, always retry once with a new session.
                     if (re.InnerException is InvalidSessionException && retryAttempt == 0)
                     {
@@ -383,7 +375,20 @@ namespace Amazon.QLDB.Driver
             }
         }
 
-        private QldbSession GetSession()
+        /// <summary>
+        /// Retrieve the table names that are available within the ledger.
+        /// </summary>
+        ///
+        /// <returns>The Enumerable over the table names in the ledger.</returns>
+        public IEnumerable<string> ListTableNames()
+        {
+            return this.Execute((txn) =>
+            {
+                return txn.Execute(TableNameQuery);
+            }).Select(i => i.StringValue);
+        }
+
+        internal QldbSession GetSession()
         {
             this.logger.LogDebug(
                 "Getting session. There are {} free sessions and {} available permits.",
