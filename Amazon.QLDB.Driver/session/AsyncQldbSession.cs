@@ -91,7 +91,7 @@ namespace Amazon.QLDB.Driver
             {
                 if (Regex.Match(ise.Message, @"Transaction\s.*\shas\sexpired").Success)
                 {
-                    throw new QldbTransactionException(transactionId, false, ise);
+                    throw new QldbTransactionException(transactionId, await this.TryAbort(transaction), ise);
                 }
                 else
                 {

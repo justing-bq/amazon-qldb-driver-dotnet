@@ -336,16 +336,15 @@ namespace Amazon.QLDB.Driver
                         "Errored Transaction ID: {}. Error cause: {}",
                         re.TransactionId,
                         re.InnerException.ToString());
-                    if (re.IsSessionAlive)
+                    replaceDeadSession = !re.IsSessionAlive;
+                    if (replaceDeadSession)
                     {
-                        this.logger.LogDebug("Retrying with a different session...");
-                        replaceDeadSession = false;
-                        this.ReleaseSession(session);
+                        this.logger.LogDebug("Replacing invalid session...");
                     }
                     else
                     {
-                        this.logger.LogDebug("Replacing expired session...");
-                        replaceDeadSession = true;
+                        this.logger.LogDebug("Retrying with a different session...");
+                        this.ReleaseSession(session);
                     }
 
                     try
