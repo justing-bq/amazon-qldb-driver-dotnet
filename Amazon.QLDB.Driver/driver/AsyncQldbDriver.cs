@@ -153,6 +153,11 @@ namespace Amazon.QLDB.Driver
                 {
                     retryAttempt++;
 
+                    if (IsTransactionExpiry(re.InnerException))
+                    {
+                        throw re.InnerException;
+                    }
+
                     // If initial session is invalid, always retry once with a new session.
                     if (re.InnerException is InvalidSessionException && retryAttempt == 1)
                     {
@@ -234,7 +239,7 @@ namespace Amazon.QLDB.Driver
             return (await result.ToListAsync(cancellationToken)).Select(i => i.StringValue);
         }
 
-        private async Task<AsyncQldbSession> GetSession()
+        internal async Task<AsyncQldbSession> GetSession()
         {
             this.logger.LogDebug(
                 "Getting session. There are {} free sessions and {} available permits.",

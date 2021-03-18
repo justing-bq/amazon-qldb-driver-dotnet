@@ -13,8 +13,11 @@
 
 namespace Amazon.QLDB.Driver
 {
+    using System;
+    using System.Text.RegularExpressions;
     using System.Threading;
     using Amazon.QLDBSession;
+    using Amazon.QLDBSession.Model;
     using Microsoft.Extensions.Logging;
 
     public abstract class BaseQldbDriver
@@ -41,6 +44,12 @@ namespace Amazon.QLDB.Driver
             this.sessionClient = sessionClient;
             this.logger = logger;
             this.poolPermits = new SemaphoreSlim(maxConcurrentTransactions, maxConcurrentTransactions);
+        }
+
+        internal static bool IsTransactionExpiry(Exception ex)
+        {
+            return ex is InvalidSessionException
+                && Regex.Match(ex.Message, @"Transaction\s.*\shas\sexpired").Success;
         }
     }
 }

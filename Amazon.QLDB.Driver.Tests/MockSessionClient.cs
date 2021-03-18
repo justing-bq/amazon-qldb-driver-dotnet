@@ -30,6 +30,14 @@ namespace Amazon.QLDB.Driver.Tests
         internal MockSessionClient()
         {
             this.responses = new Queue<Output>();
+            this.defaultResponse = new SendCommandResponse
+            {
+                StartSession = new StartSessionResult(),
+                StartTransaction = new StartTransactionResult(),
+                ExecuteStatement = new ExecuteStatementResult(),
+                CommitTransaction = new CommitTransactionResult(),
+                ResponseMetadata = new ResponseMetadata()
+            };
         }
 
         // Not used
@@ -40,7 +48,7 @@ namespace Amazon.QLDB.Driver.Tests
             // Do nothing
         }
 
-        public void SetDefaultResponse(SendCommandResponse response)
+        internal void SetDefaultResponse(SendCommandResponse response)
         {
             this.defaultResponse = response;
         }
@@ -54,7 +62,7 @@ namespace Amazon.QLDB.Driver.Tests
         public Task<SendCommandResponse> SendCommandAsync(SendCommandRequest request,
             CancellationToken cancellationToken = default)
         {
-            if (responses.Count == 0 && this.defaultResponse != null)
+            if (responses.Count == 0)
             {
                 return Task.FromResult(this.defaultResponse);
             }
@@ -72,7 +80,7 @@ namespace Amazon.QLDB.Driver.Tests
 
         internal void QueueResponse(SendCommandResponse response)
         {
-            var output = new Output
+            Output output = new Output
             {
                 exception = null,
                 response = response
@@ -83,7 +91,7 @@ namespace Amazon.QLDB.Driver.Tests
 
         internal void QueueResponse(Exception e)
         {
-            var output = new Output
+            Output output = new Output
             {
                 exception = e,
                 response = null
