@@ -82,6 +82,10 @@ namespace Amazon.QLDB.Driver
                 await transaction.Commit();
                 return returnedValue;
             }
+            catch (TransactionAbortedException)
+            {
+                throw;
+            }
             catch (InvalidSessionException ise)
             {
                 if (IsTransactionExpiredException(ise))
@@ -110,6 +114,10 @@ namespace Amazon.QLDB.Driver
             catch (Exception e)
             {
                 throw new QldbTransactionException(transactionId, await this.TryAbort(transaction), e);
+            }
+            finally
+            {
+                transaction?.Dispose();
             }
         }
 

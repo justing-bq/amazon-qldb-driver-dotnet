@@ -76,6 +76,10 @@ namespace Amazon.QLDB.Driver
                 transaction.Commit();
                 return returnedValue;
             }
+            catch (TransactionAbortedException)
+            {
+                throw;
+            }
             catch (InvalidSessionException ise)
             {
                 if (IsTransactionExpiredException(ise))

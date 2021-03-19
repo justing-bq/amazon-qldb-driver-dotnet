@@ -37,7 +37,7 @@ namespace Amazon.QLDB.Driver.Tests
         private static readonly byte[] digest = { 89, 49, 253, 196, 209, 176, 42, 98, 35, 214, 6, 163, 93,
             141, 170, 92, 75, 218, 111, 151, 173, 49, 57, 144, 227, 72, 215, 194, 186, 93, 85, 108,
         };
-        
+
         private static SendCommandResponse startSessionResponse = new SendCommandResponse
         {
             StartSession = new StartSessionResult { SessionToken = "testToken" },
@@ -48,7 +48,7 @@ namespace Amazon.QLDB.Driver.Tests
             StartTransaction = new StartTransactionResult { TransactionId = TestTransactionId },
             ResponseMetadata = new ResponseMetadata { RequestId = "testId" }
         };
-        
+
         private SendCommandResponse executeResponse(List<ValueHolder> values)
         {
             Page firstPage;
@@ -66,7 +66,7 @@ namespace Amazon.QLDB.Driver.Tests
                 ResponseMetadata = new ResponseMetadata { RequestId = "testId" }
             };
         }
-        
+
         private SendCommandResponse commitResponse(byte[] hash)
         {
             return new SendCommandResponse
@@ -110,7 +110,7 @@ namespace Amazon.QLDB.Driver.Tests
                     RequestId = "testId"
                 }
             };
-            
+
             mockClient = new MockSessionClient();
             mockClient.SetDefaultResponse(sendCommandResponse);
 
@@ -132,38 +132,38 @@ namespace Amazon.QLDB.Driver.Tests
         public void TestAsyncWithPoolLimitArgumentBounds()
         {
             AsyncQldbDriver driver;
-        
+
             // Default pool limit
             driver = builder.Build();
             Assert.IsNotNull(driver);
-        
+
             // Negative pool limit
             Assert.ThrowsException<ArgumentException>(() => builder.WithMaxConcurrentTransactions(-4));
-        
+
             driver = builder.WithMaxConcurrentTransactions(0).Build();
             Assert.IsNotNull(driver);
             driver = builder.WithMaxConcurrentTransactions(4).Build();
             Assert.IsNotNull(driver);
         }
-        
+
         [TestMethod]
         public void TestAsyncQldbDriverConstructorReturnsValidObject()
         {
             var driver = new AsyncQldbDriver("ledgerName", mockClient, 4, NullLogger.Instance);
-        
+
             Assert.IsNotNull(driver);
         }
-        
+
         [TestMethod]
         public async Task TestAsyncListTableNamesLists()
         {
             var factory = new ValueFactory();
             var tables = new List<string> { "table1", "table2" };
             var ions = tables.Select(t => TestingUtilities.CreateValueHolder(factory.NewString(t))).ToList();
-        
+
             var h1 = QldbHash.ToQldbHash(TestTransactionId);
             h1 = AsyncTransaction.Dot(h1, AsyncQldbDriver.TableNameQuery, new List<IIonValue>());
-        
+
             mockClient.QueueResponse(startSessionResponse);
             mockClient.QueueResponse(startTransactionResponse);
             mockClient.QueueResponse(executeResponse(ions));
@@ -172,22 +172,22 @@ namespace Amazon.QLDB.Driver.Tests
             var driver = new AsyncQldbDriver("ledgerName", mockClient, 4, NullLogger.Instance);
 
             var result = await driver.ListTableNames();
-        
+
             Assert.IsNotNull(result);
             CollectionAssert.AreEqual(tables, result.ToList());
-            
+
             mockClient.Clear();
         }
-        
+
         [TestMethod]
         public async Task TestAsyncGetSession_NewSessionReturned()
         {
             var driver = new AsyncQldbDriver("ledgerName", mockClient, 1, NullLogger.Instance);
-            
+
             AsyncQldbSession returnedSession = await driver.GetSession();
             Assert.IsNotNull(returnedSession);
         }
-        
+
         [TestMethod]
         public async Task TestAsyncGetSession_ExpectedSessionReturned()
         {
@@ -218,7 +218,7 @@ namespace Amazon.QLDB.Driver.Tests
 
                 return;
             }
-            
+
             Assert.Fail("driver.GetSession() should have thrown retriable exception");
         }
 
@@ -228,7 +228,7 @@ namespace Amazon.QLDB.Driver.Tests
             var driver = new AsyncQldbDriver("ledgerName", mockClient, 4, NullLogger.Instance);
             await driver.Execute(txn => txn.Execute("testStatement"));
         }
-        
+
         [TestMethod]
         public async Task TestAsyncExecuteWithActionAndRetryPolicyCanInvokeSuccessfully()
         {
@@ -242,7 +242,7 @@ namespace Amazon.QLDB.Driver.Tests
         public async Task TestAsyncExecuteWithFuncLambdaReturnsFuncOutput()
         {
             var driver = new AsyncQldbDriver("ledgerName", mockClient, 4, NullLogger.Instance);
-        
+
             var result = await driver.Execute(txn =>
             {
                 txn.Execute("testStatement");
@@ -250,12 +250,12 @@ namespace Amazon.QLDB.Driver.Tests
             });
             Assert.AreEqual("testReturnValue", result);
         }
-        
+
         [TestMethod]
         public async Task TestAsyncExecuteWithFuncLambdaAndRetryPolicyReturnsFuncOutput()
         {
             var driver = new AsyncQldbDriver("ledgerName", mockClient, 4, NullLogger.Instance);
-        
+
             driver.Dispose();
 
             await Assert.ThrowsExceptionAsync<QldbDriverException>(async () => await driver.Execute(async txn =>
@@ -264,7 +264,7 @@ namespace Amazon.QLDB.Driver.Tests
                 return Task.FromResult("testReturnValue");
             }, Amazon.QLDB.Driver.RetryPolicy.Builder().Build()));
         }
-        
+
         [DataTestMethod]
         [DynamicData(nameof(CreateRetriableExecuteTestData), DynamicDataSourceType.Method)]
         public async Task TestAsyncExecute_RetryOnExceptions(
@@ -328,7 +328,7 @@ namespace Amazon.QLDB.Driver.Tests
                     typeof(QldbDriverException) },
                 // Not supported Txn exception.
                 new object[] { defaultPolicy, new Exception[] { new QldbTransactionException("txnid1111111",
-                    new QldbDriverException("qldb")) }, typeof(QldbDriverException) },
+                    new QldbDriverException("qldb")) }, typeof(QldbTransactionException) },
                 // Not supported exception.
                 new object[] { defaultPolicy, new Exception[] { new ArgumentException("qldb") },
                     typeof(ArgumentException) },

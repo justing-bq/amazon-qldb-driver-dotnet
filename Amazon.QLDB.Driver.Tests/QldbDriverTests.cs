@@ -47,7 +47,7 @@ namespace Amazon.QLDB.Driver.Tests
             StartTransaction = new StartTransactionResult { TransactionId = TestTransactionId },
             ResponseMetadata = new ResponseMetadata { RequestId = "testId" }
         };
-        
+
         private SendCommandResponse executeResponse(List<ValueHolder> values)
         {
             Page firstPage;
@@ -65,7 +65,7 @@ namespace Amazon.QLDB.Driver.Tests
                 ResponseMetadata = new ResponseMetadata { RequestId = "testId" }
             };
         }
-        
+
         private SendCommandResponse commitResponse(byte[] hash)
         {
             return new SendCommandResponse
@@ -112,7 +112,7 @@ namespace Amazon.QLDB.Driver.Tests
 
             mockClient = new MockSessionClient();
             mockClient.SetDefaultResponse(sendCommandResponse);
-            
+
             builder = QldbDriver.Builder()
                 .WithLedger("testLedger")
                 .WithRetryLogging()
@@ -174,19 +174,19 @@ namespace Amazon.QLDB.Driver.Tests
 
             Assert.IsNotNull(result);
             CollectionAssert.AreEqual(tables, result.ToList());
-            
+
             mockClient.Clear();
         }
-        
+
         [TestMethod]
         public void TestGetSession_NewSessionReturned()
         {
             var driver = new QldbDriver("ledgerName", mockClient, 1, NullLogger.Instance);
-            
+
             QldbSession returnedSession = driver.GetSession();
             Assert.IsNotNull(returnedSession);
         }
-        
+
         [TestMethod]
         public void TestGetSession_ExpectedSessionReturned()
         {
@@ -197,7 +197,7 @@ namespace Amazon.QLDB.Driver.Tests
 
             Assert.AreEqual(session.SessionId, returnedSession.GetSessionId());
         }
-        
+
         [TestMethod]
         public void TestGetSession_GetTwoSessionsFromPoolOfOne_TimeoutOnSecondGet()
         {
@@ -207,7 +207,7 @@ namespace Amazon.QLDB.Driver.Tests
 
             Assert.IsNotNull(returnedSession);
         }
-        
+
         [TestMethod]
         public void TestGetSession_FailedToCreateSession_ThrowTheOriginalException()
         {
@@ -227,10 +227,10 @@ namespace Amazon.QLDB.Driver.Tests
 
                 return;
             }
-            
+
             Assert.Fail("driver.GetSession() should have thrown retriable exception");
         }
-        
+
         [TestMethod]
         public void TestRetryPolicyContext_Create_ShouldReturnCorrectProperties()
         {
@@ -347,7 +347,7 @@ namespace Amazon.QLDB.Driver.Tests
 
             var driver = new QldbDriver("ledgerName", mockClient, 4, NullLogger.Instance);
             var retry = new Mock<Action<int>>();
-        
+
             try
             {
                 driver.Execute(txn => txn.Execute(statement), policy, retry.Object);
@@ -361,7 +361,7 @@ namespace Amazon.QLDB.Driver.Tests
             }
 
             retry.Verify(r => r.Invoke(It.IsAny<int>()), retryActionCalledTimes);
-            
+
             mockClient.Clear();
         }
 
@@ -383,12 +383,12 @@ namespace Amazon.QLDB.Driver.Tests
                     typeof(QldbDriverException), Times.Never() },
                 // Not supported Txn exception.
                 new object[] { defaultPolicy, new Exception[] { new QldbTransactionException("txnid1111111",
-                    new QldbDriverException("qldb")) }, typeof(QldbDriverException), Times.Never() },
+                    new QldbDriverException("qldb")) }, typeof(QldbTransactionException), Times.Never() },
                 // Not supported exception.
                 new object[] { defaultPolicy, new Exception[] { new ArgumentException("qldb") },
                     typeof(ArgumentException), Times.Never() },
                 // Transaction expiry.
-                new object[] { defaultPolicy, 
+                new object[] { defaultPolicy,
                     new Exception[] { new InvalidSessionException("Transaction 324weqr2314 has expired") },
                     typeof(InvalidSessionException), Times.Never() },
                 // Retry OCC within retry limit.

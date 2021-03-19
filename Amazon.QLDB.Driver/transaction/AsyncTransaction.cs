@@ -29,7 +29,7 @@ namespace Amazon.QLDB.Driver
     /// not be retried, as the state of the transaction is now ambiguous. When an OCC conflict occurs, the transaction
     /// is closed.
     /// </summary>
-    internal class AsyncTransaction : BaseTransaction
+    internal class AsyncTransaction : BaseTransaction, IDisposable
     {
         private readonly CancellationToken cancellationToken;
         private readonly SemaphoreSlim hashLock;
@@ -153,6 +153,11 @@ namespace Amazon.QLDB.Driver
         public virtual async Task<IAsyncResult> Execute(string statement, params IIonValue[] parameters)
         {
             return await this.Execute(statement, new List<IIonValue>(parameters));
+        }
+
+        public void Dispose()
+        {
+            this.hashLock.Dispose();
         }
     }
 }
