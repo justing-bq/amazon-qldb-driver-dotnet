@@ -49,7 +49,7 @@ namespace Amazon.QLDB.Driver
         /// <param name="logger">The logger to use.</param>
         internal AsyncQldbDriver(
             string ledgerName,
-            AmazonQLDBSessionClient sessionClient,
+            IAmazonQLDBSession sessionClient,
             int maxConcurrentTransactions,
             ILogger logger)
             : base(ledgerName, sessionClient, maxConcurrentTransactions, logger)
@@ -81,6 +81,8 @@ namespace Amazon.QLDB.Driver
                 }
 
                 this.sessionPool.Dispose();
+                this.sessionClient.Dispose();
+                this.poolPermits.Dispose();
             }
         }
 
@@ -232,7 +234,7 @@ namespace Amazon.QLDB.Driver
             return (await result.ToListAsync(cancellationToken)).Select(i => i.StringValue);
         }
 
-        private async Task<AsyncQldbSession> GetSession()
+        internal async Task<AsyncQldbSession> GetSession()
         {
             this.logger.LogDebug(
                 "Getting session. There are {} free sessions and {} available permits.",

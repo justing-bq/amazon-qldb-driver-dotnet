@@ -29,9 +29,10 @@ namespace Amazon.QLDB.Driver
     /// not be retried, as the state of the transaction is now ambiguous. When an OCC conflict occurs, the transaction
     /// is closed.
     /// </summary>
-    internal class AsyncTransaction : BaseTransaction
+    internal class AsyncTransaction : BaseTransaction, IDisposable
     {
         private readonly CancellationToken cancellationToken;
+        private readonly SemaphoreSlim hashLock;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="AsyncTransaction"/> class.
@@ -45,6 +46,7 @@ namespace Amazon.QLDB.Driver
             : base(session, txnId, logger)
         {
             this.cancellationToken = token;
+            this.hashLock = new SemaphoreSlim(1, 1);
         }
 
         /// <summary>
@@ -75,14 +77,22 @@ namespace Amazon.QLDB.Driver
         /// <returns>A task representing the asynchronous commit operation.</returns>
         public async Task Commit()
         {
-            byte[] hashBytes = this.qldbHash.Hash;
-            MemoryStream commitDigest = (await this.session.CommitTransactionAsync(
-                    this.txnId,
-                    new MemoryStream(hashBytes),
-                    this.cancellationToken)).CommitDigest;
-            if (!hashBytes.SequenceEqual(commitDigest.ToArray()))
+            await this.hashLock.WaitAsync(this.cancellationToken);
+            try
             {
-                throw new InvalidOperationException(ExceptionMessages.TransactionDigestMismatch);
+                byte[] hashBytes = this.qldbHash.Hash;
+                MemoryStream commitDigest = (await this.session.CommitTransactionAsync(
+                        this.txnId,
+                        new MemoryStream(hashBytes),
+                        this.cancellationToken)).CommitDigest;
+                if (!hashBytes.SequenceEqual(commitDigest.ToArray()))
+                {
+                    throw new InvalidOperationException(ExceptionMessages.TransactionDigestMismatch);
+                }
+            }
+            finally
+            {
+                this.hashLock.Release();
             }
         }
 
@@ -116,10 +126,18 @@ namespace Amazon.QLDB.Driver
 
             parameters ??= new List<IIonValue>();
 
-            this.qldbHash = Dot(this.qldbHash, statement, parameters);
-            ExecuteStatementResult executeStatementResult = await this.session.ExecuteStatementAsync(
-                this.txnId, statement, parameters, this.cancellationToken);
-            return new AsyncResult(this.session, this.txnId, executeStatementResult, this.cancellationToken);
+            await this.hashLock.WaitAsync(this.cancellationToken);
+            try
+            {
+                this.qldbHash = Dot(this.qldbHash, statement, parameters);
+                ExecuteStatementResult executeStatementResult = await this.session.ExecuteStatementAsync(
+                    this.txnId, statement, parameters, this.cancellationToken);
+                return new AsyncResult(this.session, this.txnId, executeStatementResult, this.cancellationToken);
+            }
+            finally
+            {
+                this.hashLock.Release();
+            }
         }
 
         /// <summary>
@@ -135,6 +153,11 @@ namespace Amazon.QLDB.Driver
         public virtual async Task<IAsyncResult> Execute(string statement, params IIonValue[] parameters)
         {
             return await this.Execute(statement, new List<IIonValue>(parameters));
+        }
+
+        public void Dispose()
+        {
+            this.hashLock.Dispose();
         }
     }
 }

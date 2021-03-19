@@ -49,7 +49,7 @@ namespace Amazon.QLDB.Driver
         /// <param name="logger">The logger to use.</param>
         internal QldbDriver(
             string ledgerName,
-            AmazonQLDBSessionClient sessionClient,
+            IAmazonQLDBSession sessionClient,
             int maxConcurrentTransactions,
             ILogger logger)
             : base(ledgerName, sessionClient, maxConcurrentTransactions, logger)
@@ -65,6 +65,25 @@ namespace Amazon.QLDB.Driver
         public static QldbDriverBuilder Builder()
         {
             return new QldbDriverBuilder();
+        }
+
+        /// <summary>
+        /// Close this driver and end all sessions in the current pool. No-op if already closed.
+        /// </summary>
+        public void Dispose()
+        {
+            if (!this.isClosed)
+            {
+                this.isClosed = true;
+                while (this.sessionPool.Count > 0)
+                {
+                    this.sessionPool.Take().Close();
+                }
+
+                this.sessionPool.Dispose();
+                this.sessionClient.Dispose();
+                this.poolPermits.Dispose();
+            }
         }
 
         /// <summary>
@@ -260,24 +279,7 @@ namespace Amazon.QLDB.Driver
             }).Select(i => i.StringValue);
         }
 
-        /// <summary>
-        /// Close this driver and end all sessions in the current pool. No-op if already closed.
-        /// </summary>
-        public void Dispose()
-        {
-            if (!this.isClosed)
-            {
-                this.isClosed = true;
-                while (this.sessionPool.Count > 0)
-                {
-                    this.sessionPool.Take().Close();
-                }
-
-                this.sessionPool.Dispose();
-            }
-        }
-
-        private T Execute<T>(Func<TransactionExecutor, T> func, RetryPolicy retryPolicy, Action<int> retryAction)
+        internal T Execute<T>(Func<TransactionExecutor, T> func, RetryPolicy retryPolicy, Action<int> retryAction)
         {
             if (this.isClosed)
             {
@@ -381,7 +383,7 @@ namespace Amazon.QLDB.Driver
             }
         }
 
-        private QldbSession GetSession()
+        internal QldbSession GetSession()
         {
             this.logger.LogDebug(
                 "Getting session. There are {} free sessions and {} available permits.",
