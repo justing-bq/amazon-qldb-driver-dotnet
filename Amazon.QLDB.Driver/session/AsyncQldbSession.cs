@@ -69,7 +69,7 @@ namespace Amazon.QLDB.Driver
             ValidationUtils.AssertNotNull(func, "func");
 
             AsyncTransaction transaction = null;
-            string transactionId = "None";
+            string transactionId = QldbTransactionException.DefaultTransactionId;
             try
             {
                 transaction = await this.StartTransaction(cancellationToken);
@@ -83,15 +83,15 @@ namespace Amazon.QLDB.Driver
                 await transaction.Commit();
                 return returnedValue;
             }
-            catch (QldbTransactionException qte)
+            catch (QldbTransactionException)
             {
-                throw qte;
+                throw;
             }
             catch (InvalidSessionException ise)
             {
                 if (Regex.Match(ise.Message, @"Transaction\s.*\shas\sexpired").Success)
                 {
-                    throw new QldbTransactionException(transactionId, false, ise);
+                    throw new QldbTransactionException(transactionId, await this.TryAbort(transaction), ise);
                 }
                 else
                 {
