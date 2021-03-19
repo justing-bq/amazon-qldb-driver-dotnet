@@ -13,6 +13,8 @@
 
 namespace Amazon.QLDB.Driver
 {
+    using System.Text.RegularExpressions;
+    using Amazon.QLDBSession.Model;
     using Microsoft.Extensions.Logging;
 
     /// <summary>
@@ -45,6 +47,11 @@ namespace Amazon.QLDB.Driver
         internal string GetSessionId()
         {
             return this.session.SessionId;
+        }
+
+        private protected static bool IsTransactionExpiredException(InvalidSessionException ise)
+        {
+            return Regex.Match(ise.Message, @"Transaction\s.*\shas\sexpired").Success;
         }
     }
 }

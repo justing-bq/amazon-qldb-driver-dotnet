@@ -15,7 +15,6 @@ namespace Amazon.QLDB.Driver
 {
     using System;
     using System.Net;
-    using System.Text.RegularExpressions;
     using System.Threading;
     using System.Threading.Tasks;
     using Amazon.QLDBSession.Model;
@@ -83,13 +82,9 @@ namespace Amazon.QLDB.Driver
                 await transaction.Commit();
                 return returnedValue;
             }
-            catch (QldbTransactionException)
-            {
-                throw;
-            }
             catch (InvalidSessionException ise)
             {
-                if (Regex.Match(ise.Message, @"Transaction\s.*\shas\sexpired").Success)
+                if (IsTransactionExpiredException(ise))
                 {
                     throw new QldbTransactionException(transactionId, await this.TryAbort(transaction), ise);
                 }

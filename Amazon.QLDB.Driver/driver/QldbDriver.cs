@@ -66,7 +66,7 @@ namespace Amazon.QLDB.Driver
         {
             return new QldbDriverBuilder();
         }
-        
+
         /// <summary>
         /// Close this driver and end all sessions in the current pool. No-op if already closed.
         /// </summary>
@@ -266,7 +266,20 @@ namespace Amazon.QLDB.Driver
             return this.Execute(func, retryPolicy, null);
         }
 
-        public T Execute<T>(Func<TransactionExecutor, T> func, RetryPolicy retryPolicy, Action<int> retryAction)
+        /// <summary>
+        /// Retrieve the table names that are available within the ledger.
+        /// </summary>
+        ///
+        /// <returns>The Enumerable over the table names in the ledger.</returns>
+        public IEnumerable<string> ListTableNames()
+        {
+            return this.Execute((txn) =>
+            {
+                return txn.Execute(TableNameQuery);
+            }).Select(i => i.StringValue);
+        }
+
+        internal T Execute<T>(Func<TransactionExecutor, T> func, RetryPolicy retryPolicy, Action<int> retryAction)
         {
             if (this.isClosed)
             {
@@ -368,19 +381,6 @@ namespace Amazon.QLDB.Driver
                     throw qte.InnerException;
                 }
             }
-        }
-
-        /// <summary>
-        /// Retrieve the table names that are available within the ledger.
-        /// </summary>
-        ///
-        /// <returns>The Enumerable over the table names in the ledger.</returns>
-        public IEnumerable<string> ListTableNames()
-        {
-            return this.Execute((txn) =>
-            {
-                return txn.Execute(TableNameQuery);
-            }).Select(i => i.StringValue);
         }
 
         internal QldbSession GetSession()
