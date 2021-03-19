@@ -282,7 +282,8 @@ namespace Amazon.QLDB.Driver.Tests
             {
                 mockClient.QueueResponse(ex);
 
-                if (!(ex is RetriableException {IsSessionAlive: true}))
+                // OccConflictException reuses the session so no need for another start session.
+                if (ex is not OccConflictException)
                 {
                     mockClient.QueueResponse(startSessionResponse);
                 }
@@ -314,12 +315,10 @@ namespace Amazon.QLDB.Driver.Tests
             var defaultPolicy = Driver.RetryPolicy.Builder().Build();
             var customerPolicy = Driver.RetryPolicy.Builder().WithMaxRetries(10).Build();
 
-            var cee = new RetriableException("txnId11111", true, new CapacityExceededException("qldb", ErrorType.Receiver, "errorCode", "requestId", HttpStatusCode.ServiceUnavailable));
-            var occ = new RetriableException("txnId11111", true, new OccConflictException("qldb", new BadRequestException("oops")));
-            var occFailedAbort = new RetriableException("txnId11111", false, new OccConflictException("qldb", new BadRequestException("oops")));
-            var txnExpiry = new RetriableException("txnid1111111", false, new InvalidSessionException("Transaction 324weqr2314 has expired"));
-            var ise = new RetriableException("txnid1111111", false, new InvalidSessionException("invalid session"));
-            var http500 = new RetriableException("txnid1111111", true, new AmazonQLDBSessionException("", 0, "", "", HttpStatusCode.ServiceUnavailable));
+            var cee = new CapacityExceededException("qldb", ErrorType.Receiver, "errorCode", "requestId", HttpStatusCode.ServiceUnavailable);
+            var occ = new OccConflictException("qldb", new BadRequestException("oops"));
+            var ise = new InvalidSessionException("invalid session");
+            var http500 = new AmazonQLDBSessionException("", 0, "", "", HttpStatusCode.ServiceUnavailable);
 
             return new List<object[]>() {
                 // No exception, No retry.
@@ -334,7 +333,8 @@ namespace Amazon.QLDB.Driver.Tests
                 new object[] { defaultPolicy, new Exception[] { new ArgumentException("qldb") },
                     typeof(ArgumentException) },
                 // Transaction expiry.
-                new object[] { defaultPolicy, new Exception[] { txnExpiry },
+                new object[] { defaultPolicy,
+                    new Exception[] { new InvalidSessionException("Transaction 324weqr2314 has expired") },
                     typeof(InvalidSessionException) },
                 // Retry OCC within retry limit.
                 new object[] { defaultPolicy, new Exception[] { occ, occ, occ }, null },
@@ -348,8 +348,6 @@ namespace Amazon.QLDB.Driver.Tests
                 // Retry CapacityExceededException exceed limit.
                 new object[] { defaultPolicy, new Exception[] { cee, cee, cee, cee, cee },
                     typeof(CapacityExceededException) },
-                // Retry OCC with abort txn failures.
-                new object[] { defaultPolicy, new Exception[] { occFailedAbort, occ, occFailedAbort }, null },
                 // Retry customized policy within retry limit.
                 new object[] { customerPolicy, new Exception[] { ise, ise, ise, ise, ise, ise, ise, ise}, null },
             };
