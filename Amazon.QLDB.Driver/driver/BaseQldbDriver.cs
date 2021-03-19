@@ -45,11 +45,5 @@ namespace Amazon.QLDB.Driver
             this.logger = logger;
             this.poolPermits = new SemaphoreSlim(maxConcurrentTransactions, maxConcurrentTransactions);
         }
-
-        internal static bool IsTransactionExpiry(Exception ex)
-        {
-            return ex is InvalidSessionException
-                && Regex.Match(ex.Message, @"Transaction\s.*\shas\sexpired").Success;
-        }
     }
 }

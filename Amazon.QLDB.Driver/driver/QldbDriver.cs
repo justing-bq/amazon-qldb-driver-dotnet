@@ -66,7 +66,7 @@ namespace Amazon.QLDB.Driver
         {
             return new QldbDriverBuilder();
         }
-        
+
         /// <summary>
         /// Close this driver and end all sessions in the current pool. No-op if already closed.
         /// </summary>
