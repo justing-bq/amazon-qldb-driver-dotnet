@@ -161,7 +161,7 @@ namespace Amazon.QLDB.Driver.Tests
             var ions = tables.Select(t => TestingUtilities.CreateValueHolder(factory.NewString(t))).ToList();
 
             var h1 = QldbHash.ToQldbHash(TestTransactionId);
-            h1 = Transaction.Dot(h1, QldbDriver.TableNameQuery, new List<IIonValue> { });
+            h1 = Transaction.Dot(h1, QldbDriverBase<QldbSession>.TableNameQuery, new List<IIonValue> { });
 
             mockClient.QueueResponse(startSessionResponse);
             mockClient.QueueResponse(startTransactionResponse);
@@ -394,9 +394,9 @@ namespace Amazon.QLDB.Driver.Tests
                 // Retry OCC within retry limit.
                 new object[] { defaultPolicy, new Exception[] { occ, occ, occ }, null, Times.Exactly(3) },
                 // Retry ISE within retry limit.
-                new object[] { defaultPolicy, new Exception[] { ise, ise, ise }, null, Times.Exactly(2) },
+                new object[] { defaultPolicy, new Exception[] { ise, ise, ise }, null, Times.Exactly(3) },
                 // Retry mixed exceptions within retry limit.
-                new object[] { defaultPolicy, new Exception[] { ise, occ, http500 }, null, Times.Exactly(2) },
+                new object[] { defaultPolicy, new Exception[] { ise, occ, http500 }, null, Times.Exactly(3) },
                 // Retry OCC exceed limit.
                 new object[] { defaultPolicy, new Exception[] { occ, ise, http500, ise, occ },
                     typeof(OccConflictException), Times.Exactly(4) },
@@ -405,7 +405,7 @@ namespace Amazon.QLDB.Driver.Tests
                     typeof(CapacityExceededException), Times.Exactly(4) },
                 // Retry customized policy within retry limit.
                 new object[] { customerPolicy, new Exception[] { ise, ise, ise, ise, ise, ise, ise, ise}, null,
-                    Times.Exactly(7) },
+                    Times.Exactly(8) },
             };
         }
     }

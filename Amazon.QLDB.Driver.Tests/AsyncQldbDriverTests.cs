@@ -162,7 +162,7 @@ namespace Amazon.QLDB.Driver.Tests
             var ions = tables.Select(t => TestingUtilities.CreateValueHolder(factory.NewString(t))).ToList();
 
             var h1 = QldbHash.ToQldbHash(TestTransactionId);
-            h1 = AsyncTransaction.Dot(h1, AsyncQldbDriver.TableNameQuery, new List<IIonValue>());
+            h1 = AsyncTransaction.Dot(h1, QldbDriverBase<AsyncQldbSession>.TableNameQuery, new List<IIonValue>());
 
             mockClient.QueueResponse(startSessionResponse);
             mockClient.QueueResponse(startTransactionResponse);
