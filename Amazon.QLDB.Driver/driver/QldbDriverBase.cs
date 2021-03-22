@@ -72,7 +72,7 @@ namespace Amazon.QLDB.Driver
             this.PoolPermits.Release();
         }
 
-        internal void HandleRetry(
+        internal void ThrowIfNoRetry(
             QldbTransactionException qte,
             T currentSession,
             int maxRetries,
@@ -135,6 +135,14 @@ namespace Amazon.QLDB.Driver
 
                 throw qte.InnerException;
             }
+        }
+
+        internal void LogSessionPoolState()
+        {
+            this.Logger.LogDebug(
+                "Getting session. There are {} free sessions and {} available permits.",
+                this.SessionPool.Count,
+                this.SessionPool.BoundedCapacity - this.PoolPermits.CurrentCount);
         }
     }
 }

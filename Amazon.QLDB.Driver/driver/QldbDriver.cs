@@ -296,7 +296,7 @@ namespace Amazon.QLDB.Driver
                 }
                 catch (QldbTransactionException qte)
                 {
-                    this.driverBase.HandleRetry(
+                    this.driverBase.ThrowIfNoRetry(
                         qte,
                         session,
                         retryPolicy.MaxRetries,
@@ -325,16 +325,12 @@ namespace Amazon.QLDB.Driver
 
         internal QldbSession GetSession()
         {
-            this.driverBase.Logger.LogDebug(
-                "Getting session. There are {} free sessions and {} available permits.",
-                this.driverBase.SessionPool.Count,
-                this.driverBase.SessionPool.BoundedCapacity - this.driverBase.PoolPermits.CurrentCount);
+            this.driverBase.LogSessionPoolState();
 
             if (this.driverBase.PoolPermits.Wait(QldbDriverBase<QldbSession>.DefaultTimeoutInMs))
             {
-                var session = this.driverBase.SessionPool.Count > 0 ? this.driverBase.SessionPool.Take() :
+                return this.driverBase.SessionPool.Count > 0 ? this.driverBase.SessionPool.Take() :
                     this.StartNewSession();
-                return session;
             }
             else
             {
