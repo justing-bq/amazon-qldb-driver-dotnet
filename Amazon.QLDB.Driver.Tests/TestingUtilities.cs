@@ -31,6 +31,55 @@ namespace Amazon.QLDB.Driver.Tests
 
     internal static class TestingUtilities
     {
+        internal static SendCommandResponse StartSessionResponse(string requestId)
+        {
+            return new SendCommandResponse
+            {
+                StartSession = new StartSessionResult { SessionToken = "testToken" },
+                ResponseMetadata = new ResponseMetadata { RequestId = requestId }
+            };
+        }
+
+        internal static SendCommandResponse StartTransactionResponse(string transactionId, string requestId)
+        {
+            return new SendCommandResponse
+            {
+                StartTransaction = new StartTransactionResult { TransactionId = transactionId },
+                ResponseMetadata = new ResponseMetadata { RequestId = requestId }
+            };
+        }
+        
+        internal static SendCommandResponse ExecuteResponse(string requestId, List<ValueHolder> values)
+        {
+            Page firstPage;
+            if (values == null)
+            {
+                firstPage = new Page {NextPageToken = null};
+            }
+            else
+            {
+                firstPage = new Page {NextPageToken = null, Values = values};
+            }
+            return new SendCommandResponse
+            {
+                ExecuteStatement = new ExecuteStatementResult { FirstPage = firstPage },
+                ResponseMetadata = new ResponseMetadata { RequestId = requestId }
+            };
+        }
+        
+        internal static SendCommandResponse CommitResponse(string transactionId, string requestId, byte[] hash)
+        {
+            return new SendCommandResponse
+            {
+                CommitTransaction = new CommitTransactionResult
+                {
+                    CommitDigest = new MemoryStream(hash),
+                    TransactionId = transactionId
+                },
+                ResponseMetadata = new ResponseMetadata { RequestId = requestId }
+            };
+        }
+
         internal static ValueHolder CreateValueHolder(IIonValue ionValue)
         {
             MemoryStream stream = new MemoryStream();

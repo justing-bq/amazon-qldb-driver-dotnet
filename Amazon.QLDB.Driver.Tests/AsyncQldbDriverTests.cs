@@ -32,53 +32,14 @@ namespace Amazon.QLDB.Driver.Tests
     public class AsyncQldbDriverTests
     {
         private const string TestTransactionId = "testTransactionId12345";
+        private const string TestRequestId = "testId";
+        private const string TestLedger = "ledgerName";
         private static AsyncQldbDriverBuilder builder;
         private static MockSessionClient mockClient;
+        private static AsyncQldbDriver testDriver;
         private static readonly byte[] digest = { 89, 49, 253, 196, 209, 176, 42, 98, 35, 214, 6, 163, 93,
             141, 170, 92, 75, 218, 111, 151, 173, 49, 57, 144, 227, 72, 215, 194, 186, 93, 85, 108,
         };
-
-        private static SendCommandResponse startSessionResponse = new SendCommandResponse
-        {
-            StartSession = new StartSessionResult { SessionToken = "testToken" },
-            ResponseMetadata = new ResponseMetadata { RequestId = "testId" }
-        };
-        private static SendCommandResponse startTransactionResponse = new SendCommandResponse
-        {
-            StartTransaction = new StartTransactionResult { TransactionId = TestTransactionId },
-            ResponseMetadata = new ResponseMetadata { RequestId = "testId" }
-        };
-
-        private SendCommandResponse executeResponse(List<ValueHolder> values)
-        {
-            Page firstPage;
-            if (values == null)
-            {
-                firstPage = new Page {NextPageToken = null};
-            }
-            else
-            {
-                firstPage = new Page {NextPageToken = null, Values = values};
-            }
-            return new SendCommandResponse
-            {
-                ExecuteStatement = new ExecuteStatementResult { FirstPage = firstPage },
-                ResponseMetadata = new ResponseMetadata { RequestId = "testId" }
-            };
-        }
-
-        private SendCommandResponse commitResponse(byte[] hash)
-        {
-            return new SendCommandResponse
-            {
-                CommitTransaction = new CommitTransactionResult
-                {
-                    CommitDigest = new MemoryStream(hash),
-                    TransactionId = TestTransactionId
-                },
-                ResponseMetadata = new ResponseMetadata { RequestId = "testId" }
-            };
-        }
 
         [TestInitialize]
         public void SetupTest()
@@ -107,7 +68,7 @@ namespace Amazon.QLDB.Driver.Tests
                 },
                 ResponseMetadata = new ResponseMetadata
                 {
-                    RequestId = "testId"
+                    RequestId = TestRequestId
                 }
             };
 
@@ -120,6 +81,8 @@ namespace Amazon.QLDB.Driver.Tests
                 .WithLogger(NullLogger.Instance)
                 .WithAWSCredentials(new Mock<AWSCredentials>().Object)
                 .WithQLDBSessionConfig(new AmazonQLDBSessionConfig());
+            
+            testDriver = new AsyncQldbDriver(TestLedger, mockClient, 4, NullLogger.Instance);
         }
 
         [TestMethod]
@@ -149,7 +112,7 @@ namespace Amazon.QLDB.Driver.Tests
         [TestMethod]
         public void TestAsyncQldbDriverConstructorReturnsValidObject()
         {
-            var driver = new AsyncQldbDriver("ledgerName", mockClient, 4, NullLogger.Instance);
+            var driver = new AsyncQldbDriver(TestLedger, mockClient, 4, NullLogger.Instance);
 
             Assert.IsNotNull(driver);
         }
@@ -164,14 +127,12 @@ namespace Amazon.QLDB.Driver.Tests
             var h1 = QldbHash.ToQldbHash(TestTransactionId);
             h1 = AsyncTransaction.Dot(h1, QldbDriverBase<AsyncQldbSession>.TableNameQuery, new List<IIonValue>());
 
-            mockClient.QueueResponse(startSessionResponse);
-            mockClient.QueueResponse(startTransactionResponse);
-            mockClient.QueueResponse(executeResponse(ions));
-            mockClient.QueueResponse(commitResponse(h1.Hash));
+            mockClient.QueueResponse(TestingUtilities.StartSessionResponse(TestRequestId));
+            mockClient.QueueResponse(TestingUtilities.StartTransactionResponse(TestTransactionId, TestRequestId));
+            mockClient.QueueResponse(TestingUtilities.ExecuteResponse(TestRequestId, ions));
+            mockClient.QueueResponse(TestingUtilities.CommitResponse(TestTransactionId, TestRequestId, h1.Hash));
 
-            var driver = new AsyncQldbDriver("ledgerName", mockClient, 4, NullLogger.Instance);
-
-            var result = await driver.ListTableNames();
+            var result = await testDriver.ListTableNames();
 
             Assert.IsNotNull(result);
             CollectionAssert.AreEqual(tables, result.ToList());
@@ -182,7 +143,7 @@ namespace Amazon.QLDB.Driver.Tests
         [TestMethod]
         public async Task TestAsyncGetSession_NewSessionReturned()
         {
-            var driver = new AsyncQldbDriver("ledgerName", mockClient, 1, NullLogger.Instance);
+            var driver = new AsyncQldbDriver(TestLedger, mockClient, 1, NullLogger.Instance);
 
             AsyncQldbSession returnedSession = await driver.GetSession();
             Assert.IsNotNull(returnedSession);
@@ -191,12 +152,10 @@ namespace Amazon.QLDB.Driver.Tests
         [TestMethod]
         public async Task TestAsyncGetSession_ExpectedSessionReturned()
         {
-            var session = new Session(null, null, null, "testId", null);
-
-            var driver = new AsyncQldbDriver("ledgerName", mockClient, 1, NullLogger.Instance);
+            var driver = new AsyncQldbDriver(TestLedger, mockClient, 1, NullLogger.Instance);
             AsyncQldbSession returnedSession = await driver.GetSession();
 
-            Assert.AreEqual(session.SessionId, returnedSession.GetSessionId());
+            Assert.AreEqual(TestRequestId, returnedSession.GetSessionId());
         }
 
         [TestMethod]
@@ -205,45 +164,52 @@ namespace Amazon.QLDB.Driver.Tests
             var exception = new AmazonServiceException("test");
             mockClient.QueueResponse(exception);
 
-            var driver = new AsyncQldbDriver("ledgerName", mockClient, 1, NullLogger.Instance);
+            var driver = new AsyncQldbDriver(TestLedger, mockClient, 1, NullLogger.Instance);
 
             try
             {
                 await driver.GetSession();
+                
+                Assert.Fail("driver.GetSession() should have thrown retriable exception");
             }
             catch (RetriableException re)
             {
                 Assert.IsNotNull(re.InnerException);
-                Assert.IsTrue(re.InnerException == exception);
-
-                return;
+                Assert.AreEqual(exception, re.InnerException);
             }
-
-            Assert.Fail("driver.GetSession() should have thrown retriable exception");
         }
 
         [TestMethod]
         public async Task TestAsyncExecuteWithActionLambdaCanInvokeSuccessfully()
         {
-            var driver = new AsyncQldbDriver("ledgerName", mockClient, 4, NullLogger.Instance);
-            await driver.Execute(txn => txn.Execute("testStatement"));
+            try
+            {
+                await testDriver.Execute(async txn => await txn.Execute("testStatement"));
+            }
+            catch (Exception)
+            {
+                Assert.Fail("driver.Execute() should not have thrown exception");
+            }
         }
 
         [TestMethod]
         public async Task TestAsyncExecuteWithActionAndRetryPolicyCanInvokeSuccessfully()
         {
-            var driver = new AsyncQldbDriver("ledgerName", mockClient, 4, NullLogger.Instance);
-
-            await driver.Execute(txn => txn.Execute("testStatement"),
-                Amazon.QLDB.Driver.RetryPolicy.Builder().Build());
+            try
+            {
+                await testDriver.Execute(async txn => await txn.Execute("testStatement"),
+                    Amazon.QLDB.Driver.RetryPolicy.Builder().Build());
+            }
+            catch (Exception)
+            {
+                Assert.Fail("driver.Execute() should not have thrown exception");
+            }
         }
 
         [TestMethod]
         public async Task TestAsyncExecuteWithFuncLambdaReturnsFuncOutput()
         {
-            var driver = new AsyncQldbDriver("ledgerName", mockClient, 4, NullLogger.Instance);
-
-            var result = await driver.Execute(txn =>
+            var result = await testDriver.Execute(txn =>
             {
                 txn.Execute("testStatement");
                 return Task.FromResult("testReturnValue");
@@ -254,11 +220,8 @@ namespace Amazon.QLDB.Driver.Tests
         [TestMethod]
         public async Task TestAsyncExecuteWithFuncLambdaAndRetryPolicyReturnsFuncOutput()
         {
-            var driver = new AsyncQldbDriver("ledgerName", mockClient, 4, NullLogger.Instance);
-
-            driver.Dispose();
-
-            await Assert.ThrowsExceptionAsync<QldbDriverException>(async () => await driver.Execute(async txn =>
+            testDriver.Dispose();
+            await Assert.ThrowsExceptionAsync<QldbDriverException>(async () => await testDriver.Execute(async txn =>
             {
                 await txn.Execute("testStatement");
                 return Task.FromResult("testReturnValue");
@@ -276,8 +239,8 @@ namespace Amazon.QLDB.Driver.Tests
             var h1 = QldbHash.ToQldbHash(TestTransactionId);
             h1 = Transaction.Dot(h1, statement, new List<IIonValue> { });
 
-            mockClient.QueueResponse(startSessionResponse);
-            mockClient.QueueResponse(startTransactionResponse);
+            mockClient.QueueResponse(TestingUtilities.StartSessionResponse(TestRequestId));
+            mockClient.QueueResponse(TestingUtilities.StartTransactionResponse(TestTransactionId, TestRequestId));
             foreach (var ex in exceptions)
             {
                 mockClient.QueueResponse(ex);
@@ -285,19 +248,17 @@ namespace Amazon.QLDB.Driver.Tests
                 // OccConflictException reuses the session so no need for another start session.
                 if (ex is not OccConflictException)
                 {
-                    mockClient.QueueResponse(startSessionResponse);
+                    mockClient.QueueResponse(TestingUtilities.StartSessionResponse(TestRequestId));
                 }
 
-                mockClient.QueueResponse(startTransactionResponse);
+                mockClient.QueueResponse(TestingUtilities.StartTransactionResponse(TestTransactionId, TestRequestId));
             }
-            mockClient.QueueResponse(executeResponse(null));
-            mockClient.QueueResponse(commitResponse(h1.Hash));
-
-            var driver = new AsyncQldbDriver("ledgerName", mockClient, 4, NullLogger.Instance);
+            mockClient.QueueResponse(TestingUtilities.ExecuteResponse(TestRequestId, null));
+            mockClient.QueueResponse(TestingUtilities.CommitResponse(TestTransactionId, TestRequestId, h1.Hash));
 
             try
             {
-                await driver.Execute(txn => txn.Execute(statement), policy);
+                await testDriver.Execute(txn => txn.Execute(statement), policy);
 
                 Assert.IsNull(expectedExceptionType);
             }
@@ -315,9 +276,9 @@ namespace Amazon.QLDB.Driver.Tests
             var defaultPolicy = Driver.RetryPolicy.Builder().Build();
             var customerPolicy = Driver.RetryPolicy.Builder().WithMaxRetries(10).Build();
 
-            var cee = new CapacityExceededException("qldb", ErrorType.Receiver, "errorCode", "requestId", HttpStatusCode.ServiceUnavailable);
-            var occ = new OccConflictException("qldb", new BadRequestException("oops"));
-            var ise = new InvalidSessionException("invalid session");
+            var capacityExceeded = new CapacityExceededException("qldb", ErrorType.Receiver, "errorCode", "requestId", HttpStatusCode.ServiceUnavailable);
+            var occConflict = new OccConflictException("qldb", new BadRequestException("oops"));
+            var invalidSession = new InvalidSessionException("invalid session");
             var http500 = new AmazonQLDBSessionException("", 0, "", "", HttpStatusCode.ServiceUnavailable);
 
             return new List<object[]>() {
@@ -337,19 +298,20 @@ namespace Amazon.QLDB.Driver.Tests
                     new Exception[] { new InvalidSessionException("Transaction 324weqr2314 has expired") },
                     typeof(InvalidSessionException) },
                 // Retry OCC within retry limit.
-                new object[] { defaultPolicy, new Exception[] { occ, occ, occ }, null },
+                new object[] { defaultPolicy, new Exception[] { occConflict, occConflict, occConflict }, null },
                 // Retry ISE within retry limit.
-                new object[] { defaultPolicy, new Exception[] { ise, ise, ise }, null },
+                new object[] { defaultPolicy, new Exception[] { invalidSession, invalidSession, invalidSession }, null },
                 // Retry mixed exceptions within retry limit.
-                new object[] { defaultPolicy, new Exception[] { ise, occ, http500 }, null },
+                new object[] { defaultPolicy, new Exception[] { invalidSession, occConflict, http500 }, null },
                 // Retry OCC exceed limit.
-                new object[] { defaultPolicy, new Exception[] { occ, ise, http500, ise, occ },
-                    typeof(OccConflictException) },
+                new object[] { defaultPolicy, new Exception[] { occConflict, invalidSession, http500, invalidSession,
+                    occConflict }, typeof(OccConflictException) },
                 // Retry CapacityExceededException exceed limit.
-                new object[] { defaultPolicy, new Exception[] { cee, cee, cee, cee, cee },
-                    typeof(CapacityExceededException) },
+                new object[] { defaultPolicy, new Exception[] { capacityExceeded, capacityExceeded, capacityExceeded,
+                    capacityExceeded, capacityExceeded }, typeof(CapacityExceededException) },
                 // Retry customized policy within retry limit.
-                new object[] { customerPolicy, new Exception[] { ise, ise, ise, ise, ise, ise, ise, ise}, null },
+                new object[] { customerPolicy, new Exception[] { invalidSession, invalidSession, invalidSession, 
+                    invalidSession, invalidSession, invalidSession, invalidSession, invalidSession}, null },
             };
         }
     }
