@@ -133,17 +133,10 @@ namespace Amazon.QLDB.Driver.Tests
         }
 
         [TestMethod]
-        public void TestGetSession_NewSessionReturned()
-        {
-            QldbSession returnedSession = testDriver.GetSession();
-            Assert.IsNotNull(returnedSession);
-        }
-
-        [TestMethod]
         public void TestGetSession_ExpectedSessionReturned()
         {
             QldbSession returnedSession = testDriver.GetSession();
-
+            Assert.IsNotNull(returnedSession);
             Assert.AreEqual(TestRequestId, returnedSession.GetSessionId());
         }
 

@@ -134,16 +134,10 @@ namespace Amazon.QLDB.Driver.Tests
         }
 
         [TestMethod]
-        public async Task TestAsyncGetSession_NewSessionReturned()
-        {
-            AsyncQldbSession returnedSession = await testDriver.GetSession();
-            Assert.IsNotNull(returnedSession);
-        }
-
-        [TestMethod]
         public async Task TestAsyncGetSession_ExpectedSessionReturned()
         {
             AsyncQldbSession returnedSession = await testDriver.GetSession();
+            Assert.IsNotNull(returnedSession);
             Assert.AreEqual(TestRequestId, returnedSession.GetSessionId());
         }
 
