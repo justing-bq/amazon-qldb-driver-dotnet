@@ -267,7 +267,7 @@ namespace Amazon.QLDB.Driver.Tests
 
         [TestMethod]
         [Obsolete]
-        public void TestExecuteWithFuncLambdaAndRetryActionReturnsFuncOutput()
+        public void TestExecuteWithFuncLambdaAndRetryActionThrowsExceptionAfterDispose()
         {
             testDriver.Dispose();
             Assert.ThrowsException<QldbDriverException>(() => testDriver.Execute((txn) =>
