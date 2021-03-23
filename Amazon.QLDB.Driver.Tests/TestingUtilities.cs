@@ -31,6 +31,41 @@ namespace Amazon.QLDB.Driver.Tests
 
     internal static class TestingUtilities
     {
+        internal static SendCommandResponse defaultSendCommandResponse(
+            string sessionToken,
+            string transactionId,
+            string requestId,
+            byte[] digest)
+        {
+            return new SendCommandResponse
+            {
+                StartSession = new StartSessionResult
+                {
+                    SessionToken = sessionToken
+                },
+                StartTransaction = new StartTransactionResult
+                {
+                    TransactionId = transactionId
+                },
+                ExecuteStatement = new ExecuteStatementResult
+                {
+                    FirstPage = new Page
+                    {
+                        NextPageToken = null,
+                        Values = new List<ValueHolder>()
+                    }
+                },
+                CommitTransaction = new CommitTransactionResult
+                {
+                    CommitDigest = new MemoryStream(digest)
+                },
+                ResponseMetadata = new ResponseMetadata
+                {
+                    RequestId = requestId
+                }
+            };
+        }
+        
         internal static SendCommandResponse StartSessionResponse(string requestId)
         {
             return new SendCommandResponse

@@ -15,7 +15,6 @@ namespace Amazon.QLDB.Driver.Tests
 {
     using System;
     using System.Collections.Generic;
-    using System.IO;
     using System.Linq;
     using System.Net;
     using Amazon.IonDotnet.Tree;
@@ -26,6 +25,7 @@ namespace Amazon.QLDB.Driver.Tests
     using Microsoft.Extensions.Logging.Abstractions;
     using Microsoft.VisualStudio.TestTools.UnitTesting;
     using Moq;
+    using static TestingUtilities;
 
     [TestClass]
     public class QldbDriverTests
@@ -33,62 +33,33 @@ namespace Amazon.QLDB.Driver.Tests
         private const string TestTransactionId = "testTransactionId12345";
         private const string TestRequestId = "testId";
         private const string TestLedger = "ledgerName";
+
         private static QldbDriverBuilder builder;
         private static MockSessionClient mockClient;
         private static QldbDriver testDriver;
-        private static readonly byte[] digest = new byte[] { 89, 49, 253, 196, 209, 176, 42, 98, 35, 214, 6, 163, 93,
-            141, 170, 92, 75, 218, 111, 151, 173, 49, 57, 144, 227, 72, 215, 194, 186, 93, 85, 108,
+        private static readonly byte[] digest =
+        { 
+            172, 173, 243, 92, 129, 184, 254, 234, 173, 95, 107, 180, 60, 73, 11, 238,
+            6, 87, 197, 229, 178, 142, 155, 122, 218, 197, 23, 15, 241, 117, 92, 132
         };
 
         [TestInitialize]
         public void SetupTest()
         {
-            var sendCommandResponse = new SendCommandResponse
-            {
-                StartSession = new StartSessionResult
-                {
-                    SessionToken = "testToken"
-                },
-                StartTransaction = new StartTransactionResult
-                {
-                    TransactionId = "testTransactionIdddddd"
-                },
-                ExecuteStatement = new ExecuteStatementResult
-                {
-                    FirstPage = new Page
-                    {
-                        NextPageToken = null,
-                        Values = new List<ValueHolder>()
-                    }
-                },
-                CommitTransaction = new CommitTransactionResult
-                {
-                    CommitDigest = new MemoryStream(digest)
-                },
-                ResponseMetadata = new ResponseMetadata
-                {
-                    RequestId = TestRequestId
-                }
-            };
-
-            mockClient = new MockSessionClient();
-            mockClient.SetDefaultResponse(sendCommandResponse);
-
             builder = QldbDriver.Builder()
                 .WithLedger("testLedger")
                 .WithRetryLogging()
                 .WithLogger(NullLogger.Instance)
                 .WithAWSCredentials(new Mock<AWSCredentials>().Object)
                 .WithQLDBSessionConfig(new AmazonQLDBSessionConfig());
+            Assert.IsNotNull(builder);
+            
+            mockClient = new MockSessionClient();
+            mockClient.SetDefaultResponse(defaultSendCommandResponse("testToken", TestTransactionId, 
+                TestRequestId, digest));
 
             testDriver = new QldbDriver(TestLedger, mockClient, 4, NullLogger.Instance);
             Assert.IsNotNull(testDriver);
-        }
-
-        [TestMethod]
-        public void TestBuilderGetsANotNullObject()
-        {
-            Assert.IsNotNull(builder);
         }
 
         [TestMethod]
@@ -114,15 +85,15 @@ namespace Amazon.QLDB.Driver.Tests
         {
             var factory = new ValueFactory();
             var tables = new List<string>() { "table1", "table2" };
-            var ions = tables.Select(t => TestingUtilities.CreateValueHolder(factory.NewString(t))).ToList();
+            var ions = tables.Select(t => CreateValueHolder(factory.NewString(t))).ToList();
 
             var h1 = QldbHash.ToQldbHash(TestTransactionId);
             h1 = Transaction.Dot(h1, QldbDriverBase<QldbSession>.TableNameQuery, new List<IIonValue> { });
 
-            mockClient.QueueResponse(TestingUtilities.StartSessionResponse(TestRequestId));
-            mockClient.QueueResponse(TestingUtilities.StartTransactionResponse(TestTransactionId, TestRequestId));
-            mockClient.QueueResponse(TestingUtilities.ExecuteResponse(TestRequestId, ions));
-            mockClient.QueueResponse(TestingUtilities.CommitResponse(TestTransactionId, TestRequestId, h1.Hash));
+            mockClient.QueueResponse(StartSessionResponse(TestRequestId));
+            mockClient.QueueResponse(StartTransactionResponse(TestTransactionId, TestRequestId));
+            mockClient.QueueResponse(ExecuteResponse(TestRequestId, ions));
+            mockClient.QueueResponse(CommitResponse(TestTransactionId, TestRequestId, h1.Hash));
 
             var result = testDriver.ListTableNames();
 
@@ -282,8 +253,8 @@ namespace Amazon.QLDB.Driver.Tests
             var h1 = QldbHash.ToQldbHash(TestTransactionId);
             h1 = Transaction.Dot(h1, statement, new List<IIonValue> { });
 
-            mockClient.QueueResponse(TestingUtilities.StartSessionResponse(TestRequestId));
-            mockClient.QueueResponse(TestingUtilities.StartTransactionResponse(TestTransactionId, TestRequestId));
+            mockClient.QueueResponse(StartSessionResponse(TestRequestId));
+            mockClient.QueueResponse(StartTransactionResponse(TestTransactionId, TestRequestId));
             foreach (var ex in exceptions)
             {
                 mockClient.QueueResponse(ex);
@@ -291,13 +262,13 @@ namespace Amazon.QLDB.Driver.Tests
                 // OccConflictException reuses the session so no need for another start session.
                 if (ex is not OccConflictException)
                 {
-                    mockClient.QueueResponse(TestingUtilities.StartSessionResponse(TestRequestId));
+                    mockClient.QueueResponse(StartSessionResponse(TestRequestId));
                 }
 
-                mockClient.QueueResponse(TestingUtilities.StartTransactionResponse(TestTransactionId, TestRequestId));
+                mockClient.QueueResponse(StartTransactionResponse(TestTransactionId, TestRequestId));
             }
-            mockClient.QueueResponse(TestingUtilities.ExecuteResponse(TestRequestId, null));
-            mockClient.QueueResponse(TestingUtilities.CommitResponse(TestTransactionId, TestRequestId, h1.Hash));
+            mockClient.QueueResponse(ExecuteResponse(TestRequestId, null));
+            mockClient.QueueResponse(CommitResponse(TestTransactionId, TestRequestId, h1.Hash));
 
             var retry = new Mock<Action<int>>();
 
