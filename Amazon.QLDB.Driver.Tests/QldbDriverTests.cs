@@ -155,66 +155,95 @@ namespace Amazon.QLDB.Driver.Tests
         [TestMethod]
         public void TestExecuteWithActionLambdaCanInvokeSuccessfully()
         {
+            bool executeInvoked = false;
             try
             {
-                testDriver.Execute(txn => txn.Execute("testStatement"));
+                testDriver.Execute(txn =>
+                {
+                    txn.Execute("testStatement");
+                    executeInvoked = true;
+                });
             }
             catch (Exception)
             {
                 Assert.Fail("driver.Execute() should not have thrown exception");
             }
+
+            Assert.IsTrue(executeInvoked);
         }
 
         [TestMethod]
         public void TestExecuteWithActionAndRetryPolicyCanInvokeSuccessfully()
         {
+            bool executeInvoked = false;
             try
             {
                 testDriver.Execute(
-                    txn => txn.Execute("testStatement"),
+                    txn =>
+                    {
+                        txn.Execute("testStatement");
+                        executeInvoked = true;
+                    },
                     Driver.RetryPolicy.Builder().Build());
             }
             catch (Exception)
             {
                 Assert.Fail("driver.Execute() should not have thrown exception");
             }
+            
+            Assert.IsTrue(executeInvoked);
         }
 
         [TestMethod]
         [Obsolete]
         public void TestExecuteWithActionAndRetryActionCanInvokeSuccessfully()
         {
+            bool executeInvoked = false;
             try
             {
                 testDriver.Execute(
-                    txn => txn.Execute("testStatement"),
+                    txn =>
+                    {
+                        txn.Execute("testStatement");
+                        executeInvoked = true;
+                    },
                     Console.WriteLine);
             }
             catch (Exception)
             {
                 Assert.Fail("driver.Execute() should not have thrown exception");
             }
+            
+            Assert.IsTrue(executeInvoked);
         }
 
         [TestMethod]
         public void TestExecuteWithFuncLambdaReturnsFuncOutput()
         {
+            bool executeInvoked = false;
             var result = testDriver.Execute(txn =>
             {
                 txn.Execute("testStatement");
+                executeInvoked = true;
                 return "testReturnValue";
             });
+            Assert.IsTrue(executeInvoked);
             Assert.AreEqual("testReturnValue", result);
         }
         
         [TestMethod]
         public void TestExecuteWithFuncLambdaAndRetryPolicyReturnsFuncOutput()
         {
-            var result = testDriver.Execute(txn =>
-            {
-                txn.Execute("testStatement");
-                return "testReturnValue";
-            }, Driver.RetryPolicy.Builder().Build());
+            bool executeInvoked = false;
+            var result = testDriver.Execute(
+                txn =>
+                {
+                    txn.Execute("testStatement");
+                    executeInvoked = true;
+                    return "testReturnValue";
+                },
+                Driver.RetryPolicy.Builder().Build());
+            Assert.IsTrue(executeInvoked);
             Assert.AreEqual("testReturnValue", result);
         }
 
@@ -222,11 +251,14 @@ namespace Amazon.QLDB.Driver.Tests
         public void TestExecuteWithFuncLambdaAndRetryPolicyThrowsExceptionAfterDispose()
         {
             testDriver.Dispose();
-            Assert.ThrowsException<QldbDriverException>(() => testDriver.Execute((txn) =>
-            {
-                txn.Execute("testStatement");
-                return "testReturnValue";
-            }, Driver.RetryPolicy.Builder().Build()));
+            Assert.ThrowsException<QldbDriverException>(
+                () => testDriver.Execute(
+                    txn =>
+                    {
+                        txn.Execute("testStatement");
+                        return "testReturnValue";
+                    },
+                    Driver.RetryPolicy.Builder().Build()));
         }
 
         [TestMethod]
@@ -234,11 +266,14 @@ namespace Amazon.QLDB.Driver.Tests
         public void TestExecuteWithFuncLambdaAndRetryActionThrowsExceptionAfterDispose()
         {
             testDriver.Dispose();
-            Assert.ThrowsException<QldbDriverException>(() => testDriver.Execute((txn) =>
-            {
-                txn.Execute("testStatement");
-                return "testReturnValue";
-            }, Console.WriteLine));
+            Assert.ThrowsException<QldbDriverException>(
+                () => testDriver.Execute(
+                    txn =>
+                    {
+                        txn.Execute("testStatement");
+                        return "testReturnValue";
+                    },
+                    Console.WriteLine));
         }
 
         [DataTestMethod]

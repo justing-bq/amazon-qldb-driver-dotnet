@@ -134,49 +134,70 @@ namespace Amazon.QLDB.Driver.Tests
         [TestMethod]
         public async Task TestAsyncExecuteWithActionLambdaCanInvokeSuccessfully()
         {
+            bool executeInvoked = false;
             try
             {
-                await testDriver.Execute(async txn => await txn.Execute("testStatement"));
+                await testDriver.Execute(async txn =>
+                {
+                    await txn.Execute("testStatement");
+                    executeInvoked = true;
+                });
             }
             catch (Exception)
             {
                 Assert.Fail("driver.Execute() should not have thrown exception");
             }
+
+            Assert.IsTrue(executeInvoked);
         }
 
         [TestMethod]
         public async Task TestAsyncExecuteWithActionAndRetryPolicyCanInvokeSuccessfully()
         {
+            bool executeInvoked = false;
             try
             {
-                await testDriver.Execute(async txn => await txn.Execute("testStatement"),
+                await testDriver.Execute(
+                    async txn =>
+                    {
+                        await txn.Execute("testStatement");
+                        executeInvoked = true;
+                    },
                     Driver.RetryPolicy.Builder().Build());
             }
             catch (Exception)
             {
                 Assert.Fail("driver.Execute() should not have thrown exception");
             }
+            
+            Assert.IsTrue(executeInvoked);
         }
 
         [TestMethod]
         public async Task TestAsyncExecuteWithFuncLambdaReturnsFuncOutput()
         {
+            bool executeInvoked = false;
             var result = await testDriver.Execute(async txn =>
             {
                 await txn.Execute("testStatement");
+                executeInvoked = true;
                 return await Task.FromResult("testReturnValue");
             });
+            Assert.IsTrue(executeInvoked);
             Assert.AreEqual("testReturnValue", result);
         }
 
         [TestMethod]
         public async Task TestAsyncExecuteWithFuncLambdaAndRetryPolicyReturnsFuncOutput()
         {
+            bool executeInvoked = false;
             var result = await testDriver.Execute(async txn =>
             {
                 await txn.Execute("testStatement");
+                executeInvoked = true;
                 return await Task.FromResult("testReturnValue");
             }, Driver.RetryPolicy.Builder().Build());
+            Assert.IsTrue(executeInvoked);
             Assert.AreEqual("testReturnValue", result);
         }
         
@@ -184,11 +205,14 @@ namespace Amazon.QLDB.Driver.Tests
         public async Task TestAsyncExecuteWithFuncLambdaAndRetryPolicyThrowsExceptionAfterDispose()
         {
             testDriver.Dispose();
-            await Assert.ThrowsExceptionAsync<QldbDriverException>(async () => await testDriver.Execute(async txn =>
-            {
-                await txn.Execute("testStatement");
-                return Task.FromResult("testReturnValue");
-            }, Driver.RetryPolicy.Builder().Build()));
+            await Assert.ThrowsExceptionAsync<QldbDriverException>(
+                async () => await testDriver.Execute(
+                    async txn =>
+                    {
+                        await txn.Execute("testStatement");
+                        return Task.FromResult("testReturnValue");
+                    },
+                    Driver.RetryPolicy.Builder().Build()));
         }
 
         [DataTestMethod]
