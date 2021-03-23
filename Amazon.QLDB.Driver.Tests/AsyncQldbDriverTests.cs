@@ -83,6 +83,7 @@ namespace Amazon.QLDB.Driver.Tests
                 .WithQLDBSessionConfig(new AmazonQLDBSessionConfig());
             
             testDriver = new AsyncQldbDriver(TestLedger, mockClient, 4, NullLogger.Instance);
+            Assert.IsNotNull(testDriver);
         }
 
         [TestMethod]
@@ -106,14 +107,6 @@ namespace Amazon.QLDB.Driver.Tests
             driver = builder.WithMaxConcurrentTransactions(0).Build();
             Assert.IsNotNull(driver);
             driver = builder.WithMaxConcurrentTransactions(4).Build();
-            Assert.IsNotNull(driver);
-        }
-
-        [TestMethod]
-        public void TestAsyncQldbDriverConstructorReturnsValidObject()
-        {
-            var driver = new AsyncQldbDriver(TestLedger, mockClient, 4, NullLogger.Instance);
-
             Assert.IsNotNull(driver);
         }
 
@@ -143,18 +136,14 @@ namespace Amazon.QLDB.Driver.Tests
         [TestMethod]
         public async Task TestAsyncGetSession_NewSessionReturned()
         {
-            var driver = new AsyncQldbDriver(TestLedger, mockClient, 1, NullLogger.Instance);
-
-            AsyncQldbSession returnedSession = await driver.GetSession();
+            AsyncQldbSession returnedSession = await testDriver.GetSession();
             Assert.IsNotNull(returnedSession);
         }
 
         [TestMethod]
         public async Task TestAsyncGetSession_ExpectedSessionReturned()
         {
-            var driver = new AsyncQldbDriver(TestLedger, mockClient, 1, NullLogger.Instance);
-            AsyncQldbSession returnedSession = await driver.GetSession();
-
+            AsyncQldbSession returnedSession = await testDriver.GetSession();
             Assert.AreEqual(TestRequestId, returnedSession.GetSessionId());
         }
 
@@ -164,11 +153,9 @@ namespace Amazon.QLDB.Driver.Tests
             var exception = new AmazonServiceException("test");
             mockClient.QueueResponse(exception);
 
-            var driver = new AsyncQldbDriver(TestLedger, mockClient, 1, NullLogger.Instance);
-
             try
             {
-                await driver.GetSession();
+                await testDriver.GetSession();
                 
                 Assert.Fail("driver.GetSession() should have thrown retriable exception");
             }
@@ -198,7 +185,7 @@ namespace Amazon.QLDB.Driver.Tests
             try
             {
                 await testDriver.Execute(async txn => await txn.Execute("testStatement"),
-                    Amazon.QLDB.Driver.RetryPolicy.Builder().Build());
+                    Driver.RetryPolicy.Builder().Build());
             }
             catch (Exception)
             {
@@ -209,10 +196,10 @@ namespace Amazon.QLDB.Driver.Tests
         [TestMethod]
         public async Task TestAsyncExecuteWithFuncLambdaReturnsFuncOutput()
         {
-            var result = await testDriver.Execute(txn =>
+            var result = await testDriver.Execute(async txn =>
             {
-                txn.Execute("testStatement");
-                return Task.FromResult("testReturnValue");
+                await txn.Execute("testStatement");
+                return await Task.FromResult("testReturnValue");
             });
             Assert.AreEqual("testReturnValue", result);
         }
@@ -220,12 +207,23 @@ namespace Amazon.QLDB.Driver.Tests
         [TestMethod]
         public async Task TestAsyncExecuteWithFuncLambdaAndRetryPolicyReturnsFuncOutput()
         {
+            var result = await testDriver.Execute(async txn =>
+            {
+                await txn.Execute("testStatement");
+                return await Task.FromResult("testReturnValue");
+            }, Driver.RetryPolicy.Builder().Build());
+            Assert.AreEqual("testReturnValue", result);
+        }
+        
+        [TestMethod]
+        public async Task TestAsyncExecuteWithFuncLambdaAndRetryPolicyThrowsExceptionAfterDispose()
+        {
             testDriver.Dispose();
             await Assert.ThrowsExceptionAsync<QldbDriverException>(async () => await testDriver.Execute(async txn =>
             {
                 await txn.Execute("testStatement");
                 return Task.FromResult("testReturnValue");
-            }, Amazon.QLDB.Driver.RetryPolicy.Builder().Build()));
+            }, Driver.RetryPolicy.Builder().Build()));
         }
 
         [DataTestMethod]
@@ -265,15 +263,12 @@ namespace Amazon.QLDB.Driver.Tests
             catch (Exception e)
             {
                 Assert.IsTrue(expectThrow);
+
+                Assert.IsTrue(exceptions.Count > 0);
                 
                 // The exception should be the same type as the last exception in our exception list.
-                Type expectedExceptionType = null;
-                if (exceptions.Count > 0)
-                {
-                    Exception finalException = exceptions[exceptions.Count - 1];
-                    expectedExceptionType = finalException.GetType();
-                }
-
+                Exception finalException = exceptions[exceptions.Count - 1];
+                Type expectedExceptionType = finalException.GetType();
                 Assert.IsInstanceOfType(e, expectedExceptionType);
             }
 

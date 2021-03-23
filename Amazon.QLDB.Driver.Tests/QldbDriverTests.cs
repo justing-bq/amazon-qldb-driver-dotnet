@@ -82,6 +82,7 @@ namespace Amazon.QLDB.Driver.Tests
                 .WithQLDBSessionConfig(new AmazonQLDBSessionConfig());
 
             testDriver = new QldbDriver(TestLedger, mockClient, 4, NullLogger.Instance);
+            Assert.IsNotNull(testDriver);
         }
 
         [TestMethod]
@@ -105,14 +106,6 @@ namespace Amazon.QLDB.Driver.Tests
             driver = builder.WithMaxConcurrentTransactions(0).Build();
             Assert.IsNotNull(driver);
             driver = builder.WithMaxConcurrentTransactions(4).Build();
-            Assert.IsNotNull(driver);
-        }
-
-        [TestMethod]
-        public void TestQldbDriverConstructorReturnsValidObject()
-        {
-            var driver = new QldbDriver(TestLedger, mockClient, 4, NullLogger.Instance);
-
             Assert.IsNotNull(driver);
         }
 
@@ -242,16 +235,27 @@ namespace Amazon.QLDB.Driver.Tests
         [TestMethod]
         public void TestExecuteWithFuncLambdaReturnsFuncOutput()
         {
-            var result = testDriver.Execute((txn) =>
+            var result = testDriver.Execute(txn =>
             {
                 txn.Execute("testStatement");
                 return "testReturnValue";
             });
             Assert.AreEqual("testReturnValue", result);
         }
-
+        
         [TestMethod]
         public void TestExecuteWithFuncLambdaAndRetryPolicyReturnsFuncOutput()
+        {
+            var result = testDriver.Execute(txn =>
+            {
+                txn.Execute("testStatement");
+                return "testReturnValue";
+            }, Driver.RetryPolicy.Builder().Build());
+            Assert.AreEqual("testReturnValue", result);
+        }
+
+        [TestMethod]
+        public void TestExecuteWithFuncLambdaAndRetryPolicyThrowsExceptionAfterDispose()
         {
             testDriver.Dispose();
             Assert.ThrowsException<QldbDriverException>(() => testDriver.Execute((txn) =>
@@ -314,14 +318,11 @@ namespace Amazon.QLDB.Driver.Tests
             {
                 Assert.IsTrue(expectThrow);
                 
+                Assert.IsTrue(exceptions.Count > 0);
+                
                 // The exception should be the same type as the last exception in our exception list.
-                Type expectedExceptionType = null;
-                if (exceptions.Count > 0)
-                {
-                    Exception finalException = exceptions[exceptions.Count - 1];
-                    expectedExceptionType = finalException.GetType();
-                }
-
+                Exception finalException = exceptions[exceptions.Count - 1];
+                Type expectedExceptionType = finalException.GetType();
                 Assert.IsInstanceOfType(e, expectedExceptionType);
             }
 
