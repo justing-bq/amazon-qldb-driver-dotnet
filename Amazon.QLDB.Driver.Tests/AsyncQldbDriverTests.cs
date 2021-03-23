@@ -56,7 +56,7 @@ namespace Amazon.QLDB.Driver.Tests
             Assert.IsNotNull(builder);
             
             mockClient = new MockSessionClient();
-            mockClient.SetDefaultResponse(defaultSendCommandResponse("testToken", TestTransactionId, 
+            mockClient.SetDefaultResponse(DefaultSendCommandResponse("testToken", TestTransactionId, 
                 TestRequestId, digest));
             
             testDriver = new AsyncQldbDriver(TestLedger, mockClient, 4, NullLogger.Instance);

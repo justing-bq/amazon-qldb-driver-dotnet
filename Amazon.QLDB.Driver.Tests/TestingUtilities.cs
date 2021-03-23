@@ -31,7 +31,7 @@ namespace Amazon.QLDB.Driver.Tests
 
     internal static class TestingUtilities
     {
-        internal static SendCommandResponse defaultSendCommandResponse(
+        internal static SendCommandResponse DefaultSendCommandResponse(
             string sessionToken,
             string transactionId,
             string requestId,
