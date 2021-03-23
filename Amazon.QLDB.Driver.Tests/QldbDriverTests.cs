@@ -278,7 +278,7 @@ namespace Amazon.QLDB.Driver.Tests
         public void TestExecute_RetryOnExceptions(
             Driver.RetryPolicy policy,
             IList<Exception> exceptions,
-            Type expectedExceptionType,
+            bool expectThrow,
             Times retryActionCalledTimes)
         {
             string statement = "DELETE FROM table;";
@@ -308,11 +308,20 @@ namespace Amazon.QLDB.Driver.Tests
             {
                 testDriver.Execute(txn => txn.Execute(statement), policy, retry.Object);
 
-                Assert.IsNull(expectedExceptionType);
+                Assert.IsFalse(expectThrow);
             }
             catch (Exception e)
             {
-                Assert.IsNotNull(expectedExceptionType);
+                Assert.IsTrue(expectThrow);
+                
+                // The exception should be the same type as the last exception in our exception list.
+                Type expectedExceptionType = null;
+                if (exceptions.Count > 0)
+                {
+                    Exception finalException = exceptions[exceptions.Count - 1];
+                    expectedExceptionType = finalException.GetType();
+                }
+
                 Assert.IsInstanceOfType(e, expectedExceptionType);
             }
 
@@ -333,38 +342,38 @@ namespace Amazon.QLDB.Driver.Tests
 
             return new List<object[]>() {
                 // No exception, No retry.
-                new object[] { defaultPolicy, new Exception[0], null, Times.Never() },
+                new object[] { defaultPolicy, new Exception[0], false, Times.Never() },
                 // Generic Driver exception.
-                new object[] { defaultPolicy, new Exception[] { new QldbDriverException("generic") },
-                    typeof(QldbDriverException), Times.Never() },
+                new object[] { defaultPolicy, new Exception[] { new QldbDriverException("generic") }, true,
+                    Times.Never() },
                 // Not supported Txn exception.
                 new object[] { defaultPolicy, new Exception[] { new QldbTransactionException("txnid1111111",
-                    new QldbDriverException("qldb")) }, typeof(QldbTransactionException), Times.Never() },
+                    new QldbDriverException("qldb")) }, true, Times.Never() },
                 // Not supported exception.
-                new object[] { defaultPolicy, new Exception[] { new ArgumentException("qldb") },
-                    typeof(ArgumentException), Times.Never() },
+                new object[] { defaultPolicy, new Exception[] { new ArgumentException("qldb") }, true,
+                    Times.Never() },
                 // Transaction expiry.
                 new object[] { defaultPolicy,
                     new Exception[] { new InvalidSessionException("Transaction 324weqr2314 has expired") },
-                    typeof(InvalidSessionException), Times.Never() },
+                    true, Times.Never() },
                 // Retry OCC within retry limit.
-                new object[] { defaultPolicy, new Exception[] { occConflict, occConflict, occConflict }, null,
+                new object[] { defaultPolicy, new Exception[] { occConflict, occConflict, occConflict }, false,
                     Times.Exactly(3) },
                 // Retry ISE within retry limit.
-                new object[] { defaultPolicy, new Exception[] { invalidSession, invalidSession, invalidSession }, null,
+                new object[] { defaultPolicy, new Exception[] { invalidSession, invalidSession, invalidSession }, false,
                     Times.Exactly(3) },
                 // Retry mixed exceptions within retry limit.
-                new object[] { defaultPolicy, new Exception[] { invalidSession, occConflict, http500 }, null,
+                new object[] { defaultPolicy, new Exception[] { invalidSession, occConflict, http500 }, false,
                     Times.Exactly(3) },
                 // Retry OCC exceed limit.
                 new object[] { defaultPolicy, new Exception[] { occConflict, invalidSession, http500, invalidSession, 
-                    occConflict }, typeof(OccConflictException), Times.Exactly(4) },
+                    occConflict }, true, Times.Exactly(4) },
                 // Retry CapacityExceededException exceed limit.
                 new object[] { defaultPolicy, new Exception[] { capacityExceeded, capacityExceeded, capacityExceeded,
-                    capacityExceeded, capacityExceeded }, typeof(CapacityExceededException), Times.Exactly(4) },
+                    capacityExceeded, capacityExceeded }, true, Times.Exactly(4) },
                 // Retry customized policy within retry limit.
                 new object[] { customerPolicy, new Exception[] { invalidSession, invalidSession, invalidSession, 
-                    invalidSession, invalidSession, invalidSession, invalidSession, invalidSession}, null,
+                    invalidSession, invalidSession, invalidSession, invalidSession, invalidSession}, false,
                     Times.Exactly(8) },
             };
         }
